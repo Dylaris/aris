@@ -158,7 +158,7 @@ void aris_strrev(char *s)
 {
     if (!s) return;
 
-    for (size_t i = 0, j = strlen(s); i < j; i++, j--) {
+    for (size_t i = 0, j = strlen(s) - 1; i < j; i++, j--) {
         char tmp = s[i];
         s[i] = s[j];
         s[j] = tmp;
