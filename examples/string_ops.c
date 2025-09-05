@@ -3,16 +3,28 @@
 
 int main(void)
 {
-    char s1[] = "Hello, World";
-    char *s2 = strdup(aris_strrev2(s1));
-    aris_strrev(s1);
-    printf("s1: %s\n", s1);
-    printf("s2: %s\n", s2);
-    printf("%s", aris_strfmt("PREFIX: %s at %s:%d\n", s1, __FILE__, __LINE__));
-    free(s2);
+    // 1. String formatting
+    char *formatted = aris_string_tmp_format("User: %s, ID: %d", "Alice", 123);
+    printf("Formatted: %s\n", formatted);
 
-    char *s3 = "This is for you";
-    if (!aris_strpre(s3, "Th")) aris_fatal("damn it");
-    if (!aris_strpost(s3, " you")) aris_fatal("damn it");
+    // 2. In-place string reversal
+    char str[] = "Hello";
+    printf("Original: %s\n", str);
+    aris_string_reverse(str);
+    printf("Reversed: %s\n", str);
+
+    // 3. Create reversed copy
+    const char *original = "ABCD";
+    char *reversed = aris_string_tmp_reverse(original);
+    printf("Original: %s → Reversed: %s\n", original, reversed);
+
+    // 4. Prefix check
+    printf("Has prefix 'Hello': %d\n",
+           aris_string_has_prefix("Hello world", "Hello"));
+
+    // 5. Postfix check
+    printf("Has postfix 'world': %d\n",
+           aris_string_has_postfix("Hello world", "world"));
+
     return 0;
 }

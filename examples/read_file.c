@@ -5,14 +5,14 @@
 
 int main(void)
 {
-    assert(aris_fload("text") == NULL);
+    assert(aris_file_read("text", ARIS_TEXT_FILE) == NULL);
 
     char *content;
 
-    content = aris_fload(__FILE__);
-    printf("size: %zu\ncontent: %s", aris_fsize(content), content);
+    content = aris_file_read(__FILE__, ARIS_TEXT_FILE);
+    printf("size: %zu\ncontent: %s", aris_file_size(content), content);
 
-    aris_funload(content);
+    aris_file_free(content);
 
     return 0;
 }

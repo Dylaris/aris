@@ -3,35 +3,33 @@
 
 int main(void)
 {
-    char **names;
+    char **names = NULL;
 
-    names = NULL;
+    aris_vec_push(names, "Jack");
+    aris_vec_push(names, "John");
+    aris_vec_push(names, "Tom");
+    aris_vec_push(names, "Ben");
+    aris_vec_push(names, "Mike");
 
-    aris_vecpush(names, "Jack");
-    aris_vecpush(names, "John");
-    aris_vecpush(names, "Tom");
-    aris_vecpush(names, "Ben");
-    aris_vecpush(names, "Mike");
+    printf("size: %zu\ncapacity: %zu\n", aris_vec_size(names), aris_vec_capacity(names));
 
-    printf("size: %zu\ncapacity: %zu\n", aris_vecsize(names), aris_veccap(names));
-
-    for (size_t i = 0; i < aris_vecsize(names); i++) {
+    for (size_t i = 0; i < aris_vec_size(names); i++) {
         printf("id: %zu, name: %s\n", i, names[i]);
     }
 
-    aris_vecreset(names);
+    aris_vec_reset(names);
 
-    aris_vecpush(names, "1");
-    aris_vecpush(names, "11");
-    aris_vecpush(names, "111");
+    aris_vec_push(names, "1");
+    aris_vec_push(names, "11");
+    aris_vec_push(names, "111");
 
     printf("---------- after reset ---------- \n");
-    printf("size: %zu\ncapacity: %zu\n", aris_vecsize(names), aris_veccap(names));
+    printf("size: %zu\ncapacity: %zu\n", aris_vec_size(names), aris_vec_capacity(names));
 
-    for (size_t i = 0; i < aris_vecsize(names); i++) {
+    for (size_t i = 0; i < aris_vec_size(names); i++) {
         printf("id: %zu, name: %s\n", i, names[i]);
     }
 
-    aris_vecfree(names);
+    aris_vec_free(names);
     return 0;
 }

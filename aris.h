@@ -1,3 +1,23 @@
+/*
+aris.h - v0.01 - Dylaris 2025
+===================================================
+
+BRIEF:
+  Frequentyly used stuff in C language.
+
+USAGE:
+  In exactly one source file, define the implementation macro
+  before including this header:
+  ```
+    #define ARIS_IMPLEMENTATION
+    #include "aris_arena.h"
+  ```
+  In other files, just include the header without the macro.
+
+LICENSE:
+  See the end of this file for further details.
+*/
+
 #ifndef ARIS_H
 #define ARIS_H
 
@@ -10,60 +30,62 @@
 /*
  * dynamic array
  */
-struct aris_vector_header {
+typedef struct aris_vector_header {
     size_t size;
     size_t capacity;
-};
+} aris_vector_header ;
 
-#define aris_vechdr(vec) \
-    ((struct aris_vector_header*)((char*)(vec) - sizeof(struct aris_vector_header)))
-#define aris_vecsize(vec) ((vec) ? aris_vechdr(vec)->size : 0)
-#define aris_veccap(vec)  ((vec) ? aris_vechdr(vec)->capacity : 0)
-#define aris_vecpush(vec, item)                                                  \
-    do {                                                                         \
-        if (aris_vecsize(vec) + 1 > aris_veccap(vec)) {                          \
-            size_t newcap, allocsz;                                              \
-            struct aris_vector_header *newhdr;                                   \
-                                                                                 \
-            newcap = aris_veccap(vec) == 0 ? 16 : 2 * aris_veccap(vec);          \
-            allocsz = sizeof(struct aris_vector_header) + newcap*sizeof(*(vec)); \
-                                                                                 \
-            if (vec) {                                                           \
-                newhdr = realloc(aris_vechdr(vec), allocsz);                     \
-            } else {                                                             \
-                newhdr = malloc(allocsz);                                        \
-                newhdr->size = 0;                                                \
-            }                                                                    \
-            newhdr->capacity = newcap;                                           \
-                                                                                 \
-            (vec) = (void*)((char*)newhdr + sizeof(struct aris_vector_header));  \
-        }                                                                        \
-                                                                                 \
-        (vec)[aris_vechdr(vec)->size++] = (item);                                \
+#define aris_vec_header(vec) \
+    ((aris_vector_header*)((char*)(vec) - sizeof(aris_vector_header)))
+#define aris_vec_size(vec) ((vec) ? aris_vec_header(vec)->size : 0)
+#define aris_vec_capacity(vec)  ((vec) ? aris_vec_header(vec)->capacity : 0)
+#define aris_vec_push(vec, item)                                             \
+    do {                                                                     \
+        if (aris_vec_size(vec) + 1 > aris_vec_capacity(vec)) {               \
+            size_t new_capacity, alloc_size;                                 \
+            aris_vector_header *new_header;                                  \
+                                                                             \
+            new_capacity = aris_vec_capacity(vec) == 0                       \
+                           ? 16 : 2 * aris_vec_capacity(vec);                \
+            alloc_size = sizeof(aris_vector_header) +                        \
+                         new_capacity*sizeof(*(vec));                        \
+                                                                             \
+            if (vec) {                                                       \
+                new_header = realloc(aris_vec_header(vec), alloc_size);      \
+            } else {                                                         \
+                new_header = malloc(alloc_size);                             \
+                new_header->size = 0;                                        \
+            }                                                                \
+            new_header->capacity = new_capacity;                             \
+                                                                             \
+            (vec) = (void*)((char*)new_header + sizeof(aris_vector_header)); \
+        }                                                                    \
+                                                                             \
+        (vec)[aris_vec_header(vec)->size++] = (item);                        \
     } while (0)
-#define aris_vecpop(vec) ((vec)[--aris_vechdr(vec)->size])
-#define aris_vecfree(vec)                \
-    do {                                 \
-        if (vec) free(aris_vechdr(vec)); \
-        (vec) = NULL;                    \
+#define aris_vec_pop(vec) ((vec)[--aris_vec_header(vec)->size])
+#define aris_vec_free(vec)                   \
+    do {                                     \
+        if (vec) free(aris_vec_header(vec)); \
+        (vec) = NULL;                        \
     } while (0)
-#define aris_vecreset(vec) ((vec) ? aris_vechdr(vec)->size = 0 : 0)
+#define aris_vec_reset(vec) ((vec) ? aris_vec_header(vec)->size = 0 : 0)
 
 
 /*
  * static array
  */
-#define aris_arrlen(arr) (sizeof(arr)/sizeof(arr[0]))
+#define aris_arr_len(arr) (sizeof(arr)/sizeof(arr[0]))
 
 
 /*
  * string
  */
-char *aris_strfmt(const char *fmt, ...);
-void aris_strrev(char *s);
-char *aris_strrev2(const char *s);
-bool aris_strpre(const char *s, const char *prefix);
-bool aris_strpost(const char *s, const char *postfix);
+char *aris_string_tmp_format(const char *fmt, ...);
+void aris_string_reverse(char *s);
+char *aris_string_tmp_reverse(const char *s);
+bool aris_string_has_prefix(const char *s, const char *prefix);
+bool aris_string_has_postfix(const char *s, const char *postfix);
 
 /*
  * log
@@ -90,17 +112,22 @@ bool aris_strpost(const char *s, const char *postfix);
 /*
  * file
  */
-#define aris_fsize(bufp) ((bufp)                                     \
-                        ? *(size_t*)((char*)(bufp) - sizeof(size_t)) \
-                        : (size_t)0)
-#define aris_funload(bufp)                              \
-    do {                                                \
-        if (!bufp) break;                               \
-        char *allocp = (char*)(bufp) - sizeof(size_t);  \
-        free(allocp);                                   \
-        (bufp) = NULL;                                  \
+typedef enum aris_file_type {
+    ARIS_TEXT_FILE,
+    ARIS_BINARY_FILE
+} aris_file_type ;
+
+#define aris_file_size(buffer) ((buffer)                              \
+                       ? *(size_t*)((char*)(buffer) - sizeof(size_t)) \
+                       : (size_t)0)
+#define aris_file_free(buffer)                            \
+    do {                                                  \
+        if (!buffer) break;                               \
+        char *p_alloc = (char*)(buffer) - sizeof(size_t); \
+        free(p_alloc);                                    \
+        (buffer) = NULL;                                  \
     } while (0)
-char *aris_fload(const char *filename);
+char *aris_file_read(const char *filename, aris_file_type type);
 
 
 /*
@@ -112,9 +139,12 @@ char *aris_fload(const char *filename);
 /*
  * math
  */
-#define aris_min(a, b) ((a) < (b) ? (a) : (b))
-#define aris_max(a, b) ((a) > (b) ? (a) : (b))
-#define aris_swap(a, b) do { (a) ^= (b); (b) ^= (a); (a) ^= (b); } while (0)
+#define aris_min(a, b)          ((a) < (b) ? (a) : (b))
+#define aris_max(a, b)          ((a) > (b) ? (a) : (b))
+#define aris_swap(a, b)         do { (a) ^= (b); (b) ^= (a); (a) ^= (b); } while (0)
+#define aris_align_up(n, k)     (((n) + (k) - 1) & ~((k) - 1))
+#define aris_align_down(n, k)   ((n) & ~((k) - 1))
+#define aris_is_power_of_two(k) ((k) != 0 && ((k) & ((k) - 1)) == 0)
 
 
 /*
@@ -134,10 +164,10 @@ char *aris_fload(const char *filename);
 
 #ifdef ARIS_IMPLEMENTATION
 
-#define ARIS_TMPBUF_SIZE 4096
-static char aris__tmpbuf[ARIS_TMPBUF_SIZE];
+#define ARIS_TMP_BUFFER_SIZE 4096
+static char aris__tmp_buffer[ARIS_TMP_BUFFER_SIZE];
 
-char *aris_strfmt(const char *fmt, ...)
+char *aris_string_tmp_format(const char *fmt, ...)
 {
     if (!fmt) return NULL;
 
@@ -145,16 +175,18 @@ char *aris_strfmt(const char *fmt, ...)
     int len;
 
     va_start(args, fmt);
-    len = vsnprintf(aris__tmpbuf, ARIS_TMPBUF_SIZE, fmt, args);
+    len = vsnprintf(aris__tmp_buffer, ARIS_TMP_BUFFER_SIZE, fmt, args);
     va_end(args);
 
     if (len < 0) return NULL;
-    if (len >= ARIS_TMPBUF_SIZE) aris__tmpbuf[ARIS_TMPBUF_SIZE - 1] = '\0';
+    if (len >= ARIS_TMP_BUFFER_SIZE) {
+        aris__tmp_buffer[ARIS_TMP_BUFFER_SIZE - 1] = '\0';
+    }
 
-    return aris__tmpbuf;
+    return aris__tmp_buffer;
 }
 
-void aris_strrev(char *s)
+void aris_string_reverse(char *s)
 {
     if (!s) return;
 
@@ -165,7 +197,7 @@ void aris_strrev(char *s)
     }
 }
 
-char *aris_strrev2(const char *s)
+char *aris_string_tmp_reverse(const char *s)
 {
     if (!s) return NULL;
 
@@ -173,25 +205,24 @@ char *aris_strrev2(const char *s)
 
     len = strlen(s);
     if (len == 0) {
-        aris__tmpbuf[0] = '\0';
-        return aris__tmpbuf;
+        aris__tmp_buffer[0] = '\0';
+        return aris__tmp_buffer;
     }
-    if (len >= ARIS_TMPBUF_SIZE) len = ARIS_TMPBUF_SIZE - 1;
+    if (len >= ARIS_TMP_BUFFER_SIZE) len = ARIS_TMP_BUFFER_SIZE - 1;
 
     pos = len;
-    aris__tmpbuf[pos--] = '\0';
+    aris__tmp_buffer[pos--] = '\0';
 
     for (size_t i = 0; i < len; i++) {
-        aris__tmpbuf[pos--] = s[i];
+        aris__tmp_buffer[pos--] = s[i];
     }
 
-    return aris__tmpbuf;
+    return aris__tmp_buffer;
 }
 
-bool aris_strpre(const char *s, const char *prefix)
+bool aris_string_has_prefix(const char *s, const char *prefix)
 {
     if (!s || !prefix) return false;
-
     if (*prefix == '\0') return true;
 
     while (*prefix) {
@@ -204,89 +235,115 @@ bool aris_strpre(const char *s, const char *prefix)
     return true;
 }
 
-bool aris_strpost(const char *s, const char *postfix)
+bool aris_string_has_postfix(const char *s, const char *postfix)
 {
     if (!s || !postfix) return false;
-
     if (*postfix == '\0') return true;
 
-    size_t s_len, postfix_len;
-
-    s_len = strlen(s);
-    postfix_len = strlen(postfix);
+    size_t s_len = strlen(s);
+    size_t postfix_len = strlen(postfix);
 
     if (postfix_len > s_len) return false;
-
     return memcmp(s + s_len - postfix_len, postfix, postfix_len) == 0;
 }
 
-char *aris_fload(const char *filename)
+char *aris_file_read(const char *filename, aris_file_type type)
 {
-    FILE *fp;
-    size_t *sizep;
-    char *bufp;
+    FILE *f;
+    char *p_alloc;
+    char *mode; /* file open mode */
+    char *buffer;
+    long size;
 
-    fp = fopen(filename, "r");
-    if (!fp) return NULL;
+    switch (type) {
+    case ARIS_TEXT_FILE:   mode = "r";  break;
+    case ARIS_BINARY_FILE: mode = "rb"; break;
+    default:               return NULL;
+    }
 
-    fseek(fp, 0L, SEEK_END);
-    long size = ftell(fp);
-    rewind(fp);
+    f = fopen(filename, mode);
+    if (!f) return NULL;
 
-    sizep = malloc(sizeof(size_t) + size + 1);
-    if (!sizep) return NULL;
-    *sizep = (size_t)size;
+    fseek(f, 0L, SEEK_END);
+    size = ftell(f);
+    rewind(f);
 
-    bufp = (char*)(sizep + 1);
-    if (fread(bufp, size, 1, fp) != 1) {
-        free(sizep);
-        fclose(fp);
+    p_alloc = malloc(sizeof(size_t) + size + 1);
+    if (!p_alloc) return NULL;
+    *(size_t*)p_alloc = (size_t)size;
+
+    buffer = p_alloc + sizeof(size_t);
+    if (fread(buffer, size, 1, f) != 1) {
+        free(p_alloc);
+        fclose(f);
         return NULL;
     }
-    bufp[size] = '\0';
+    buffer[size] = '\0';
 
-    fclose(fp);
-    return bufp;
+    fclose(f);
+    return buffer;
 }
 
 #endif /* ARIS_IMPLEMENTATION */
 
 #ifdef ARIS_STRIP_PREFIX
 
-#define vechdr       aris_vechdr
-#define vecsize      aris_vecsize
-#define veccap       aris_veccap
-#define vecpush      aris_vecpush
-#define vecpop       aris_vecpop
-#define vecfree      aris_vecfree
-#define vecreset     aris_vecreset
+#define vec_header         aris_vec_header
+#define vec_size           aris_vec_size
+#define vec_capacity       aris_vec_capacity
+#define vec_push           aris_vec_push
+#define vec_pop            aris_vec_pop
+#define vec_free           aris_vec_free
+#define vec_reset          aris_vec_reset
 
-#define arrlen       aris_arrlen
+#define arr_len            aris_arr_len
 
-#define strfmt       aris_strfmt
-#define strrev       aris_strrev
-#define strrev2      aris_strrev2
-#define strpre       aris_strpre
-#define strpost      aris_strpost
+#define string_tmp_format  aris_string_tmp_format
+#define string_reverse     aris_string_reverse
+#define string_tmp_reverse aris_string_tmp_reverse
+#define string_has_prefix  aris_string_has_prefix
+#define string_has_postfix aris_string_has_postfix
 
-#define todo         aris_todo
-#define unreachable  aris_unreachable
-#define fatal        aris_fatal
-#define error        aris_error
+#define todo               aris_todo
+#define unreachable        aris_unreachable
+#define fatal              aris_fatal
+#define error              aris_error
 
-#define unused       aris_unused
+#define unused             aris_unused
 
-#define min          aris_min
-#define max          aris_max
-#define swap         aris_swap
+#define min                aris_min
+#define max                aris_max
+#define swap               aris_swap
 
-#define num_vargs    aris_num_vargs
+#define num_vargs          aris_num_vargs
 
-#define offset_of    aris_offset_of
-#define container_of aris_container_of
+#define offset_of          aris_offset_of
+#define container_of       aris_container_of
 
-#define fsize        aris_fsize
-#define funload      aris_funload
-#define fload        aris_fload
+#define file_size          aris_file_size
+#define file_free          aris_file_free
+#define file_read          aris_file_read
 
 #endif /* ARIS_STRIP_PREFIX */
+
+/*
+------------------------------------------------------------------------------
+This software is available under MIT license.
+------------------------------------------------------------------------------
+Copyright (c) 2025 Dylaris
+Permission is hereby granted, free of charge, to any person obtaining a copy of
+this software and associated documentation files (the "Software"), to deal in
+the Software without restriction, including without limitation the rights to
+use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies
+of the Software, and to permit persons to whom the Software is furnished to do
+so, subject to the following conditions:
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+*/
