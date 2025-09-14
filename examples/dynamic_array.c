@@ -13,8 +13,8 @@ int main(void)
 
     printf("size: %zu\ncapacity: %zu\n", aris_vec_size(names), aris_vec_capacity(names));
 
-    for (size_t i = 0; i < aris_vec_size(names); i++) {
-        printf("id: %zu, name: %s\n", i, names[i]);
+    aris_vec_foreach(char*, names, it) {
+        printf("id: %zu, name: %s\n", it-names, *it);
     }
 
     aris_vec_reset(names);
@@ -26,8 +26,8 @@ int main(void)
     printf("---------- after reset ---------- \n");
     printf("size: %zu\ncapacity: %zu\n", aris_vec_size(names), aris_vec_capacity(names));
 
-    for (size_t i = 0; i < aris_vec_size(names); i++) {
-        printf("id: %zu, name: %s\n", i, names[i]);
+    aris_vec_foreach(char*, names, it) {
+        printf("id: %zu, name: %s\n", it-names, *it);
     }
 
     aris_vec_free(names);

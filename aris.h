@@ -1,18 +1,24 @@
 /*
-aris.h - v0.01 - Dylaris 2025
+aris.h - v0.02 - Dylaris 2025
 ===================================================
 
 BRIEF:
-  Frequentyly used stuff in C language.
+  Frequentyly used stuff in C99. Not compatible with C++.
+
+NOTICE:
+  Not compatible with C++.
 
 USAGE:
   In exactly one source file, define the implementation macro
   before including this header:
   ```
     #define ARIS_IMPLEMENTATION
-    #include "aris_arena.h"
+    #include "aris.h"
   ```
   In other files, just include the header without the macro.
+
+HISTORY:
+    v0.02 Support data-structure 'deque'
 
 LICENSE:
   See the end of this file for further details.
@@ -26,6 +32,7 @@ LICENSE:
 #include <string.h>
 #include <stdarg.h>
 #include <stdbool.h>
+#include <assert.h>
 
 /*
  * dynamic array
@@ -39,43 +46,141 @@ typedef struct aris_vector_header {
     ((aris_vector_header*)((char*)(vec) - sizeof(aris_vector_header)))
 #define aris_vec_size(vec) ((vec) ? aris_vec_header(vec)->size : 0)
 #define aris_vec_capacity(vec)  ((vec) ? aris_vec_header(vec)->capacity : 0)
-#define aris_vec_push(vec, item)                                             \
-    do {                                                                     \
-        if (aris_vec_size(vec) + 1 > aris_vec_capacity(vec)) {               \
-            size_t new_capacity, alloc_size;                                 \
-            aris_vector_header *new_header;                                  \
-                                                                             \
-            new_capacity = aris_vec_capacity(vec) == 0                       \
-                           ? 16 : 2 * aris_vec_capacity(vec);                \
-            alloc_size = sizeof(aris_vector_header) +                        \
-                         new_capacity*sizeof(*(vec));                        \
-                                                                             \
-            if (vec) {                                                       \
-                new_header = realloc(aris_vec_header(vec), alloc_size);      \
-            } else {                                                         \
-                new_header = malloc(alloc_size);                             \
-                new_header->size = 0;                                        \
-            }                                                                \
-            new_header->capacity = new_capacity;                             \
-                                                                             \
-            (vec) = (void*)((char*)new_header + sizeof(aris_vector_header)); \
-        }                                                                    \
-                                                                             \
-        (vec)[aris_vec_header(vec)->size++] = (item);                        \
+
+#define aris_vec_push(vec, item)                               \
+    do {                                                       \
+        if (aris_vec_size(vec) + 1 > aris_vec_capacity(vec)) { \
+            (vec) = aris_vec_grow(vec, sizeof(*vec));          \
+        }                                                      \
+        (vec)[aris_vec_header(vec)->size++] = (item);          \
     } while (0)
 #define aris_vec_pop(vec) ((vec)[--aris_vec_header(vec)->size])
+
+#define aris_vec_isempty(vec) ((vec) ? aris_vec_size(vec) == 0 : false)
 #define aris_vec_free(vec)                   \
     do {                                     \
         if (vec) free(aris_vec_header(vec)); \
         (vec) = NULL;                        \
     } while (0)
-#define aris_vec_reset(vec) ((vec) ? aris_vec_header(vec)->size = 0 : 0)
+#define aris_vec_reset(vec)                      \
+    do {                                         \
+        if (vec) aris_vec_header(vec)->size = 0; \
+    } while (0)
+#define aris_vec_foreach(type, vec, it) for (type *it = (vec); it < (vec)+aris_vec_size(vec); it++)
+
+void *aris_vec_grow(void *vec, size_t item_size);
 
 
 /*
  * static array
  */
 #define aris_arr_len(arr) (sizeof(arr)/sizeof(arr[0]))
+#define aris_arr_foreach(type, arr, it) for (type *it = (arr); it < (arr)+aris_arr_len(arr); it++)
+
+
+/*
+ * hash table
+ */
+
+
+/*
+ * deque
+ */
+typedef struct aris_deque_header {
+    size_t size;
+    size_t capacity;
+    size_t front;
+    size_t rear;
+} aris_deque_header;
+
+#define aris_deq_header(deq) \
+    ((aris_deque_header*)((char*)(deq) - sizeof(aris_deque_header)))
+#define aris_deq_size(deq) ((deq) ? aris_deq_header(deq)->size : 0)
+#define aris_deq_capacity(deq) ((deq) ? aris_deq_header(deq)->capacity : 0)
+#define aris_deq_front(deq) ((deq) ? aris_deq_header(deq)->front : 0)
+#define aris_deq_rear(deq) ((deq) ? aris_deq_header(deq)->rear : 0)
+
+#define aris_deq_isempty(deq) ((deq) ? aris_deq_size(deq) == 0 : true)
+#define aris_deq_reset(deq)                  \
+    do {                                     \
+        if (deq) {                           \
+            aris_deq_header(deq)->size = 0;  \
+            aris_deq_header(deq)->front = 0; \
+            aris_deq_header(deq)->rear = 0;  \
+        }                                    \
+    } while (0)
+#define aris_deq_free(deq)                   \
+    do {                                     \
+        if (deq) free(aris_deq_header(deq)); \
+        (deq) = NULL;                        \
+    } while (0)
+#define aris_deq_foreach(type, deq, it)                                \
+    for (size_t idx = aris_deq_front(deq), count = aris_deq_size(deq); \
+         count > 0;                                                    \
+         idx = (idx+1)%aris_deq_capacity(deq), count--)                \
+         for (type *it = &deq[idx]; it != NULL; it = NULL)
+
+#define aris_deq_push_back(deq, item)                                                     \
+    do {                                                                                  \
+        if (aris_deq_size(deq) + 1 > aris_deq_capacity(deq)) {                            \
+            (deq) = aris_deq_grow(deq, sizeof(*deq));                                     \
+        }                                                                                 \
+        if (aris_deq_size(deq) > 0) {                                                     \
+            aris_deq_header(deq)->rear = (aris_deq_rear(deq)+1) % aris_deq_capacity(deq); \
+        }                                                                                 \
+        (deq)[aris_deq_rear(deq)] = (item);                                               \
+        aris_deq_header(deq)->size++;                                                     \
+    } while (0)
+#define aris_deq_push_front(deq, item)                                          \
+    do {                                                                        \
+        if (aris_deq_size(deq) + 1 > aris_deq_capacity(deq)) {                  \
+            (deq) = aris_deq_grow(deq, sizeof(*deq));                           \
+        }                                                                       \
+        if (aris_deq_size(deq) > 0) {                                           \
+            aris_deq_header(deq)->front = aris_deq_front(deq) == 0              \
+                        ? aris_deq_capacity(deq) - 1 : aris_deq_front(deq) - 1; \
+        }                                                                       \
+        (deq)[aris_deq_front(deq)] = (item);                                    \
+        aris_deq_header(deq)->size++;                                           \
+    } while (0)
+
+#define aris_deq_pop_front(deq)                                           \
+    do {                                                                  \
+        if (aris_deq_size(deq) > 0) {                                     \
+            aris_deq_header(deq)->size--;                                 \
+            if (aris_deq_size(deq) > 0) {                                 \
+                aris_deq_header(deq)->front = (aris_deq_front(deq) + 1) % \
+                                               aris_deq_capacity(deq);    \
+            } else {                                                      \
+                aris_deq_header(deq)->front = 0;                          \
+                aris_deq_header(deq)->rear = 0;                           \
+            }                                                             \
+        }                                                                 \
+    } while (0)
+#define aris_deq_pop_back(deq)                                              \
+    do {                                                                    \
+        if (aris_deq_size(deq) > 0) {                                       \
+            aris_deq_header(deq)->size--;                                   \
+            if (aris_deq_size(deq) > 0) {                                   \
+                aris_deq_header(deq)->rear = (aris_deq_rear(deq) +          \
+                                              aris_deq_capacity(deq) - 1) % \
+                                              aris_deq_capacity(deq);       \
+            } else {                                                        \
+                aris_deq_header(deq)->front = 0;                            \
+                aris_deq_header(deq)->rear = 0;                             \
+            }                                                               \
+        }                                                                   \
+    } while (0)
+
+#define aris_deq_peek_back(deq) (deq)[aris_deq_rear(deq)]
+#define aris_deq_peek_front(deq) (deq)[aris_deq_front(deq)]
+
+void *aris_deq_grow(void *deq, size_t item_size);
+
+
+/*
+ * double linked list
+ */
 
 
 /*
@@ -86,6 +191,7 @@ void aris_string_reverse(char *s);
 char *aris_string_tmp_reverse(const char *s);
 bool aris_string_has_prefix(const char *s, const char *prefix);
 bool aris_string_has_postfix(const char *s, const char *postfix);
+
 
 /*
  * log
@@ -164,8 +270,77 @@ char *aris_file_read(const char *filename, aris_file_type type);
 
 #ifdef ARIS_IMPLEMENTATION
 
+void *aris_vec_grow(void *vec, size_t item_size)
+{
+    size_t new_capacity, alloc_size;
+    aris_vector_header *new_header;
+
+    new_capacity = aris_vec_capacity(vec) < 16
+                   ? 16 : 2 * aris_vec_capacity(vec);
+    alloc_size = sizeof(aris_vector_header) + new_capacity*item_size;
+
+    if (vec) {
+        new_header = realloc(aris_vec_header(vec), alloc_size);
+        assert(new_header != NULL && "out of memory");
+    } else {
+        new_header = malloc(alloc_size);
+        assert(new_header != NULL && "out of memory");
+        new_header->size = 0;
+    }
+    new_header->capacity = new_capacity;
+
+    return (void*)((char*)new_header + sizeof(aris_vector_header));
+}
+
+void *aris_deq_grow(void *deq, size_t item_size)
+{
+    size_t new_capacity, alloc_size;
+    aris_deque_header *new_header;
+    void *new_deq;
+
+    new_capacity = aris_deq_capacity(deq) < 16
+                   ? 16 : 2 * aris_deq_capacity(deq);
+    alloc_size = sizeof(aris_deque_header) + new_capacity*item_size;
+
+    new_header = malloc(alloc_size);
+    assert(new_header != NULL && "out of memory");
+    new_header->size = aris_deq_size(deq);
+    new_header->capacity = new_capacity;
+    new_header->front = 0;
+    new_header->rear = 0;
+
+    /* The data of the new queue is stored continuously starting from 0. */
+    new_deq = (void*)(new_header + 1);
+    if (deq) {
+        if (aris_deq_front(deq) <= aris_deq_rear(deq)) {
+            /* Queue data is continuous in memory. */
+            memcpy(new_deq,
+                   (char*)deq + aris_deq_front(deq)*item_size,
+                   aris_deq_size(deq)*item_size);
+        } else {
+            /* The queue data is not continuous
+               The data is divided into two parts:
+               Part One: From front to the end of the array
+               Part Two: From the beginning of the array to rear */
+            size_t offset = 0;
+            memcpy((char*)new_deq + offset*item_size,
+                   (char*)deq + aris_deq_front(deq)*item_size,
+                   (aris_deq_capacity(deq) - aris_deq_front(deq)) * item_size);
+            offset += aris_deq_capacity(deq) - aris_deq_front(deq);
+            memcpy((char*)new_deq + offset*item_size,
+                   deq,
+                   (aris_deq_rear(deq)+1)*item_size);
+        }
+        new_header->rear = aris_deq_size(deq) - 1;
+    }
+    aris_deq_free(deq);
+
+    return new_deq;
+}
+
+
 #define ARIS_TMP_BUFFER_SIZE 4096
-static char aris__tmp_buffer[ARIS_TMP_BUFFER_SIZE];
+static char _tmp_buffer[ARIS_TMP_BUFFER_SIZE];
 
 char *aris_string_tmp_format(const char *fmt, ...)
 {
@@ -175,15 +350,15 @@ char *aris_string_tmp_format(const char *fmt, ...)
     int len;
 
     va_start(args, fmt);
-    len = vsnprintf(aris__tmp_buffer, ARIS_TMP_BUFFER_SIZE, fmt, args);
+    len = vsnprintf(_tmp_buffer, ARIS_TMP_BUFFER_SIZE, fmt, args);
     va_end(args);
 
     if (len < 0) return NULL;
     if (len >= ARIS_TMP_BUFFER_SIZE) {
-        aris__tmp_buffer[ARIS_TMP_BUFFER_SIZE - 1] = '\0';
+        _tmp_buffer[ARIS_TMP_BUFFER_SIZE - 1] = '\0';
     }
 
-    return aris__tmp_buffer;
+    return _tmp_buffer;
 }
 
 void aris_string_reverse(char *s)
@@ -205,19 +380,19 @@ char *aris_string_tmp_reverse(const char *s)
 
     len = strlen(s);
     if (len == 0) {
-        aris__tmp_buffer[0] = '\0';
-        return aris__tmp_buffer;
+        _tmp_buffer[0] = '\0';
+        return _tmp_buffer;
     }
     if (len >= ARIS_TMP_BUFFER_SIZE) len = ARIS_TMP_BUFFER_SIZE - 1;
 
     pos = len;
-    aris__tmp_buffer[pos--] = '\0';
+    _tmp_buffer[pos--] = '\0';
 
     for (size_t i = 0; i < len; i++) {
-        aris__tmp_buffer[pos--] = s[i];
+        _tmp_buffer[pos--] = s[i];
     }
 
-    return aris__tmp_buffer;
+    return _tmp_buffer;
 }
 
 bool aris_string_has_prefix(const char *s, const char *prefix)
@@ -293,8 +468,26 @@ char *aris_file_read(const char *filename, aris_file_type type)
 #define vec_capacity       aris_vec_capacity
 #define vec_push           aris_vec_push
 #define vec_pop            aris_vec_pop
+#define vec_isempty        aris_vec_isempty
+#define vec_foreach        aris_vec_foreach
 #define vec_free           aris_vec_free
 #define vec_reset          aris_vec_reset
+
+#define deq_header         aris_deq_header
+#define deq_size           aris_deq_size
+#define deq_capacity       aris_deq_capacity
+#define deq_front          aris_deq_front
+#define deq_rear           aris_deq_rear
+#define deq_isempty        aris_deq_isempty
+#define deq_reset          aris_deq_reset
+#define deq_free           aris_deq_free
+#define deq_foreach        aris_deq_foreach
+#define deq_push_back      aris_deq_push_back
+#define deq_push_front     aris_deq_push_front
+#define deq_pop_front      aris_deq_pop_front
+#define deq_pop_back       aris_deq_pop_back
+#define deq_peek_back      aris_deq_peek_back
+#define deq_peek_front     aris_deq_peek_front
 
 #define arr_len            aris_arr_len
 
