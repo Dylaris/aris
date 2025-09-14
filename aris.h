@@ -3,7 +3,7 @@ aris.h - v0.02 - Dylaris 2025
 ===================================================
 
 BRIEF:
-  Frequentyly used stuff in C99. Not compatible with C++.
+  Frequentyly used stuff in C programming implemented using C99.
 
 NOTICE:
   Not compatible with C++.
