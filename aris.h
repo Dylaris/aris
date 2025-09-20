@@ -1,5 +1,5 @@
 /*
-aris.h - v0.02 - Dylaris 2025
+aris.h - v0.03 - Dylaris 2025
 ===================================================
 
 BRIEF:
@@ -18,6 +18,7 @@ USAGE:
   In other files, just include the header without the macro.
 
 HISTORY:
+    v0.03 Support data-structure 'doubly instrusive linked list'
     v0.02 Support data-structure 'deque'
 
 LICENSE:
@@ -42,11 +43,9 @@ typedef struct aris_vector_header {
     size_t capacity;
 } aris_vector_header ;
 
-#define aris_vec_header(vec) \
-    ((aris_vector_header*)((char*)(vec) - sizeof(aris_vector_header)))
-#define aris_vec_size(vec) ((vec) ? aris_vec_header(vec)->size : 0)
-#define aris_vec_capacity(vec)  ((vec) ? aris_vec_header(vec)->capacity : 0)
-
+#define aris_vec_header(vec)   ((aris_vector_header*)((char*)(vec) - sizeof(aris_vector_header)))
+#define aris_vec_size(vec)     ((vec) ? aris_vec_header(vec)->size : 0)
+#define aris_vec_capacity(vec) ((vec) ? aris_vec_header(vec)->capacity : 0)
 #define aris_vec_push(vec, item)                               \
     do {                                                       \
         if (aris_vec_size(vec) + 1 > aris_vec_capacity(vec)) { \
@@ -55,7 +54,6 @@ typedef struct aris_vector_header {
         (vec)[aris_vec_header(vec)->size++] = (item);          \
     } while (0)
 #define aris_vec_pop(vec) ((vec)[--aris_vec_header(vec)->size])
-
 #define aris_vec_isempty(vec) ((vec) ? aris_vec_size(vec) == 0 : false)
 #define aris_vec_free(vec)                   \
     do {                                     \
@@ -67,7 +65,6 @@ typedef struct aris_vector_header {
         if (vec) aris_vec_header(vec)->size = 0; \
     } while (0)
 #define aris_vec_foreach(type, vec, it) for (type *it = (vec); it < (vec)+aris_vec_size(vec); it++)
-
 void *aris_vec_grow(void *vec, size_t item_size);
 
 
@@ -93,14 +90,12 @@ typedef struct aris_deque_header {
     size_t rear;
 } aris_deque_header;
 
-#define aris_deq_header(deq) \
-    ((aris_deque_header*)((char*)(deq) - sizeof(aris_deque_header)))
-#define aris_deq_size(deq) ((deq) ? aris_deq_header(deq)->size : 0)
+#define aris_deq_header(deq)   ((aris_deque_header*)((char*)(deq) - sizeof(aris_deque_header)))
+#define aris_deq_size(deq)     ((deq) ? aris_deq_header(deq)->size : 0)
 #define aris_deq_capacity(deq) ((deq) ? aris_deq_header(deq)->capacity : 0)
-#define aris_deq_front(deq) ((deq) ? aris_deq_header(deq)->front : 0)
-#define aris_deq_rear(deq) ((deq) ? aris_deq_header(deq)->rear : 0)
-
-#define aris_deq_isempty(deq) ((deq) ? aris_deq_size(deq) == 0 : true)
+#define aris_deq_front(deq)    ((deq) ? aris_deq_header(deq)->front : 0)
+#define aris_deq_rear(deq)     ((deq) ? aris_deq_header(deq)->rear : 0)
+#define aris_deq_isempty(deq)  ((deq) ? aris_deq_size(deq) == 0 : true)
 #define aris_deq_reset(deq)                  \
     do {                                     \
         if (deq) {                           \
@@ -119,7 +114,6 @@ typedef struct aris_deque_header {
          count > 0;                                                    \
          idx = (idx+1)%aris_deq_capacity(deq), count--)                \
          for (type *it = &deq[idx]; it != NULL; it = NULL)
-
 #define aris_deq_push_back(deq, item)                                                     \
     do {                                                                                  \
         if (aris_deq_size(deq) + 1 > aris_deq_capacity(deq)) {                            \
@@ -143,7 +137,6 @@ typedef struct aris_deque_header {
         (deq)[aris_deq_front(deq)] = (item);                                    \
         aris_deq_header(deq)->size++;                                           \
     } while (0)
-
 #define aris_deq_pop_front(deq)                                           \
     do {                                                                  \
         if (aris_deq_size(deq) > 0) {                                     \
@@ -171,16 +164,107 @@ typedef struct aris_deque_header {
             }                                                               \
         }                                                                   \
     } while (0)
-
-#define aris_deq_peek_back(deq) (deq)[aris_deq_rear(deq)]
+#define aris_deq_peek_back(deq)  (deq)[aris_deq_rear(deq)]
 #define aris_deq_peek_front(deq) (deq)[aris_deq_front(deq)]
-
 void *aris_deq_grow(void *deq, size_t item_size);
 
 
 /*
  * double linked list
  */
+typedef struct aris_list_node {
+    struct aris_list_node *prev;
+    struct aris_list_node *next;
+} aris_list_node;
+
+typedef struct aris_list {
+    aris_list_node head; /* dummy head */
+    size_t size;
+} aris_list;
+
+#define ARIS_INSTRUSIVE_LIST_NODE             aris_list_node node
+#define ARIS_LIST_NODE_INITIALIZER            ((aris_list_node){NULL, NULL})
+#define ARIS_LIST_INITIALIZER(name)           ((aris_list){.head = {&name.head, &name.head}, .size = 0})
+#define ARIS_LIST_ITEM_INITIALIZER(type, ...) ((type){__VA_ARGS__, .node = LIST_NODE_INITIALIZER})
+#define aris_list_init(name)                  aris_list name = LIST_INITIALIZER(name)
+#define aris_list_size(list)                  ((list)->size)
+#define aris_list_head(type, list)            list_to_item(type, (list)->head.next)
+#define aris_list_tail(type, list)            list_to_item(type, (list)->head.prev)
+#define aris_list_node_init(node)           \
+    do {                                    \
+        if (!node->prev) node->prev = node; \
+        if (!node->next) node->next = node; \
+    } while (0)
+#define aris_list_add_head(list, item)                                        \
+    do {                                                                      \
+        aris_list_node__add(&(item)->node, &(list)->head, (list)->head.next); \
+        (list)->size++;                                                       \
+    } while (0)
+#define aris_list_add_tail(list, item)                                        \
+    do {                                                                      \
+        aris_list_node__add(&(item)->node, (list)->head.prev, &(list)->head); \
+        (list)->size++;                                                       \
+    } while (0)
+#define aris_list_add_before(list, item, new_item)                                \
+    do {                                                                          \
+        aris_list_node__add(&(new_item)->node, (item)->node.prev, &(item)->node); \
+        (list)->size++;                                                           \
+    } while (0)
+#define aris_list_add_after(list, item, new_item)                                 \
+    do {                                                                          \
+        aris_list_node__add(&(new_item)->node, &(item)->node, (item)->node.next); \
+        (list)->size++;                                                           \
+    } while (0)
+#define aris_list_del_head(list)                                      \
+    do {                                                              \
+        if ((list)->size == 0) break;                                 \
+        aris_list_node *head = (list)->head.next;                     \
+        aris_list_node__del(&(list)->head, (list)->head.next->next);  \
+        head->next = head;                                            \
+        head->prev = head;                                            \
+        (list)->size--;                                               \
+    } while (0)
+#define aris_list_del_tail(list);                                     \
+    do {                                                              \
+        if ((list)->size == 0) break;                                 \
+        aris_list_node *tail = (list)->head.prev;                     \
+        aris_list_node__del((list)->head.prev->prev, &(list)->head);  \
+        tail->next = tail;                                            \
+        tail->prev = tail;                                            \
+        (list)->size--;                                               \
+    } while (0)
+#define aris_list_del(list, item)                                  \
+    do {                                                           \
+        if ((list)->size == 0) break;                              \
+        aris_list_node__del((item)->node.prev, (item)->node.next); \
+        (item)->node.next = &(item)->node;                         \
+        (item)->node.prev = &(item)->node;                         \
+        (list)->size--;                                            \
+    } while (0)
+#define aris_list_prev_item_of(type, item) aris_list_to_item(type, (item)->node.prev)
+#define aris_list_next_item_of(type, item) aris_list_to_item(type, (item)->node.next)
+#define aris_list_to_item(type, ptr)       aris_container_of(ptr, type, node)
+#define aris_list_isempty(list)            ((list)->size == 0)
+#define aris_list_ishead(list, item)       ((item)->node.prev == &(list)->head)
+#define aris_list_istail(list, item)       ((item)->node.next == &(list)->head)
+#define aris_list_foreach(type, list, iter)                                            \
+    for (aris_list_node *current = (list)->head.next, *next = (list)->head.next->next; \
+         current != (aris_list_node*)(list);                                           \
+         current = next, next = next->next)                                            \
+        for (type *iter = aris_list_to_item(type, current); iter != NULL; iter = NULL)
+#define aris_list_foreach_reverse(type, list, iter)                                    \
+    for (aris_list_node *current = (list)->head.prev, *prev = (list)->head.prev->prev; \
+         current != (aris_list_node*)(list);                                           \
+         current = prev, prev = prev->prev)                                            \
+        for (type *iter = aris_list_to_item(type, current); iter != NULL; iter = NULL)
+#define aris_list_reset(list)              \
+    do {                                   \
+        (list)->head.prev = &(list)->head; \
+        (list)->head.next = &(list)->head; \
+        (list)->size = 0;                  \
+    } while (0)
+void aris_list_node__add(aris_list_node *new_node, aris_list_node *prev_node, aris_list_node *next_node);
+void aris_list_node__del(aris_list_node *prev_node, aris_list_node *next_node);
 
 
 /*
@@ -196,22 +280,22 @@ bool aris_string_has_postfix(const char *s, const char *postfix);
 /*
  * log
  */
-#define aris_todo(msg)                                                 \
+#define ARIS_TODO(msg)                                                 \
     do {                                                               \
         fprintf(stderr, "%s:%d: TODO: %s\n", __FILE__, __LINE__, msg); \
         abort();                                                       \
     } while(0)
-#define aris_unreachable(msg)                                                 \
+#define ARIS_UNREACHABLE(msg)                                                 \
     do {                                                                      \
         fprintf(stderr, "%s:%d: UNREACHABLE: %s\n", __FILE__, __LINE__, msg); \
         abort();                                                              \
     } while(0)
-#define aris_fatal(msg)                                                 \
+#define ARIS_FATAL(msg)                                                 \
     do {                                                                \
         fprintf(stderr, "%s:%d: FATAL: %s\n", __FILE__, __LINE__, msg); \
         exit(1);                                                        \
     } while(0)
-#define aris_error(msg) \
+#define ARIS_ERROR(msg) \
     fprintf(stderr, "%s:%d: ERROR: %s\n", __FILE__, __LINE__, msg);
 
 
@@ -239,24 +323,24 @@ char *aris_file_read(const char *filename, aris_file_type type);
 /*
  * compiler
  */
-#define aris_unused(value) (void)(value)
+#define ARIS_UNUSED(value) (void)(value)
 
 
 /*
  * math
  */
-#define aris_min(a, b)          ((a) < (b) ? (a) : (b))
-#define aris_max(a, b)          ((a) > (b) ? (a) : (b))
-#define aris_swap(a, b)         do { (a) ^= (b); (b) ^= (a); (a) ^= (b); } while (0)
-#define aris_align_up(n, k)     (((n) + (k) - 1) & ~((k) - 1))
-#define aris_align_down(n, k)   ((n) & ~((k) - 1))
-#define aris_is_power_of_two(k) ((k) != 0 && ((k) & ((k) - 1)) == 0)
+#define ARIS_MIN(a, b)          ((a) < (b) ? (a) : (b))
+#define ARIS_MAX(a, b)          ((a) > (b) ? (a) : (b))
+#define ARIS_SWAP(a, b)         do { (a) ^= (b); (b) ^= (a); (a) ^= (b); } while (0)
+#define ARIS_ALIGN_UP(n, k)     (((n) + (k) - 1) & ~((k) - 1))
+#define ARIS_ALIGN_DOWN(n, k)   ((n) & ~((k) - 1))
+#define ARIS_IS_POWER_OF_TWO(k) ((k) != 0 && ((k) & ((k) - 1)) == 0)
 
 
 /*
  * variable parameter
  */
-#define aris_num_vargs(type, ...) (sizeof((type[]){__VA_ARGS__})/sizeof(type))
+#define ARIS_NUM_VARGS(type, ...) (sizeof((type[]){__VA_ARGS__})/sizeof(type))
 
 
 /*
@@ -338,6 +422,23 @@ void *aris_deq_grow(void *deq, size_t item_size)
     return new_deq;
 }
 
+void aris_list_node__add(aris_list_node *new_node, aris_list_node *prev_node, aris_list_node *next_node)
+{
+    aris_list_node_init(new_node);
+    aris_list_node_init(prev_node);
+    aris_list_node_init(next_node);
+
+    prev_node->next = new_node;
+    new_node->next = next_node;
+    next_node->prev = new_node;
+    new_node->prev = prev_node;
+}
+
+void aris_list_node__del(aris_list_node *prev_node, aris_list_node *next_node)
+{
+    prev_node->next = next_node;
+    next_node->prev = prev_node;
+}
 
 #define ARIS_TMP_BUFFER_SIZE 4096
 static char _tmp_buffer[ARIS_TMP_BUFFER_SIZE];
@@ -489,7 +590,34 @@ char *aris_file_read(const char *filename, aris_file_type type)
 #define deq_peek_back      aris_deq_peek_back
 #define deq_peek_front     aris_deq_peek_front
 
+#define INSTRUSIVE_LIST_NODE  ARIS_INSTRUSIVE_LIST_NODE
+#define LIST_NODE_INITIALIZER ARIS_LIST_NODE_INITIALIZER
+#define LIST_INITIALIZER      ARIS_LIST_INITIALIZER
+#define LIST_ITEM_INITIALIZER ARIS_LIST_ITEM_INITIALIZER
+#define list_init            aris_list_init
+#define list_size            aris_list_size
+#define list_head            aris_list_head
+#define list_tail            aris_list_tail
+#define list_node_init       aris_list_node_init
+#define list_add_head        aris_list_add_head
+#define list_add_tail        aris_list_add_tail
+#define list_add_before      aris_list_add_before
+#define list_add_after       aris_list_add_after
+#define list_del_head        aris_list_del_head
+#define list_del_tail        aris_list_del_tail
+#define list_del             aris_list_del
+#define list_prev_item_of    aris_list_prev_item_of
+#define list_next_item_of    aris_list_next_item_of
+#define list_to_item         aris_list_to_item
+#define list_isempty         aris_list_isempty
+#define list_ishead          aris_list_ishead
+#define list_istail          aris_list_istail
+#define list_foreach         aris_list_foreach
+#define list_foreach_reverse aris_list_foreach_reverse
+#define list_reset           aris_list_reset
+
 #define arr_len            aris_arr_len
+#define arr_foreach        aris_arr_foreach
 
 #define string_tmp_format  aris_string_tmp_format
 #define string_reverse     aris_string_reverse
@@ -497,18 +625,21 @@ char *aris_file_read(const char *filename, aris_file_type type)
 #define string_has_prefix  aris_string_has_prefix
 #define string_has_postfix aris_string_has_postfix
 
-#define todo               aris_todo
-#define unreachable        aris_unreachable
-#define fatal              aris_fatal
-#define error              aris_error
+#define TODO               ARIS_TODO
+#define UNREACHABLE        ARIS_UNREACHABLE
+#define FATAL              ARIS_FATAL
+#define ERROR              ARIS_ERROR
 
-#define unused             aris_unused
+#define UNUSED             ARIS_UNUSED
 
-#define min                aris_min
-#define max                aris_max
-#define swap               aris_swap
+#define MIN                ARIS_MIN
+#define MAX                ARIS_MAX
+#define SWAP               ARIS_SWAP
+#define ALIGN_UP           ARIS_ALIGN_UP
+#define ALIGN_DOWN         ARIS_ALIGN_DOWN
+#define IS_POWER_OF_TWO    ARIS_IS_POWER_OF_TWO
 
-#define num_vargs          aris_num_vargs
+#define NUM_VARGS          ARIS_NUM_VARGS
 
 #define offset_of          aris_offset_of
 #define container_of       aris_container_of

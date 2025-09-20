@@ -10,19 +10,19 @@ int main(int argc, char **argv)
 
     switch (atoi(argv[1])) {
     case 1:
-        aris_todo("this is todo");
+        ARIS_TODO("this is todo");
         break;
 
     case 2:
-        aris_fatal("this is fatal");
+        ARIS_FATAL("this is fatal");
         break;
 
     case 3:
-        aris_error("this is error");
+        ARIS_ERROR("this is error");
         break;
 
     default:
-        aris_unreachable("this is unreachable");
+        ARIS_UNREACHABLE("this is unreachable");
         break;
     }
 

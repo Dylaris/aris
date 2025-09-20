@@ -2,7 +2,7 @@
 
 ## Brief
 
-My own stb-style C library for daily use.
+My own stb-style C library (uses C99) for daily use.
 
 ## Usage
 
