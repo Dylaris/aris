@@ -14,3 +14,7 @@ For more details, please refer to the examples.
 $ cc -o nob nob.c
 $ ./nob
 ```
+
+## Reference
+
+- [Minimalist container library in c](https://www.gamedeveloper.com/programming/minimalist-container-library-in-c-part-1-)
