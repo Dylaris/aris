@@ -6,14 +6,11 @@ My own stb-style C library (uses C99) for daily use.
 
 ## Usage
 
-```c
-#define ARIS_IMPLEMENTATION
-/* #define ARIS_STRIP_PREFIX */
-#include "aris.h"
+For more details, please refer to the examples.
 
-int main(void)
-{
-    ...
-    return 0;
-}
+- build examples
+
+```console
+$ cc -o nob nob.c
+$ ./nob
 ```

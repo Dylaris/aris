@@ -1,5 +1,5 @@
 /*
-aris.h - v0.03 - Dylaris 2025
+aris.h - v0.04 - Dylaris 2025
 ===================================================
 
 BRIEF:
@@ -18,6 +18,7 @@ USAGE:
   In other files, just include the header without the macro.
 
 HISTORY:
+    v0.04 Support data-structure 'mini hash table'
     v0.03 Support data-structure 'doubly instrusive linked list'
     v0.02 Support data-structure 'deque'
 
@@ -33,6 +34,7 @@ LICENSE:
 #include <string.h>
 #include <stdarg.h>
 #include <stdbool.h>
+#include <stdint.h>
 #include <ctype.h>
 #include <assert.h>
 
@@ -268,6 +270,37 @@ typedef struct Aris_List {
 void aris_list_node__add(Aris_List_Node *new_node, Aris_List_Node *prev_node, Aris_List_Node *next_node);
 void aris_list_node__del(Aris_List_Node *prev_node, Aris_List_Node *next_node);
 
+/*
+ * mini hash table
+ *
+ * A simple hash table that uses hash values as keys and external array indices as values.
+ *
+ * Features:
+ * - Can use integers directly as keys/values, no external array needed
+ * - Cannot handle hash collisions (different keys producing same hash)
+ * - Low collision probability with good hash function or small datasets
+ *
+ * Designed for simplicity and small size, not safety.
+ */
+typedef struct Aris_Mini_Hash_Bucket {
+    uint32_t key;
+    uint32_t val;
+} Aris_Mini_Hash_Bucket;
+
+typedef struct Aris_Mini_Hash {
+    uint32_t count;
+    uint32_t capacity;
+    Aris_Mini_Hash_Bucket *buckets;
+} Aris_Mini_Hash;
+
+#define ARIS_MINI_HASH_MAX_LOAD 0.75
+
+uint32_t fnv_hash(const char *str, size_t length);
+bool aris_hash_expand(Aris_Mini_Hash *lookup, size_t new_capacity);
+bool aris_hash_set(Aris_Mini_Hash *lookup, uint32_t key, uint32_t val);
+bool aris_hash_get(Aris_Mini_Hash *lookup, uint32_t key, uint32_t *out_val);
+void aris_hash_free(Aris_Mini_Hash *lookup);
+
 
 /*
  * string
@@ -284,23 +317,32 @@ bool aris_string_has_postfix(const char *s, const char *postfix);
 /*
  * log
  */
-#define ARIS_TODO(msg)                                                 \
-    do {                                                               \
-        fprintf(stderr, "%s:%d: TODO: %s\n", __FILE__, __LINE__, msg); \
-        abort();                                                       \
-    } while(0)
-#define ARIS_UNREACHABLE(msg)                                                 \
-    do {                                                                      \
-        fprintf(stderr, "%s:%d: UNREACHABLE: %s\n", __FILE__, __LINE__, msg); \
-        abort();                                                              \
-    } while(0)
-#define ARIS_FATAL(msg)                                                 \
-    do {                                                                \
-        fprintf(stderr, "%s:%d: FATAL: %s\n", __FILE__, __LINE__, msg); \
-        exit(1);                                                        \
-    } while(0)
-#define ARIS_ERROR(msg) \
-    fprintf(stderr, "%s:%d: ERROR: %s\n", __FILE__, __LINE__, msg);
+typedef enum Aris_Log_Level {
+    ARIS_LOG_TODO,
+    ARIS_LOG_ERROR,
+    ARIS_LOG_INFO,
+    ARIS_LOG_WARN
+} Aris_Log_Level;
+
+#define aris_log(level, fmt, ...)                                                          \
+    do {                                                                                   \
+        switch (level) {                                                                   \
+        case ARIS_LOG_TODO:                                                                \
+            fprintf(stderr, "[TODO] "fmt" at %s:%d\n", ##__VA_ARGS__, __FILE__, __LINE__); \
+            exit(EXIT_FAILURE);                                                            \
+        case ARIS_LOG_ERROR:                                                               \
+            fprintf(stderr, "[ERROR] "fmt" at %s:%d\n", ##__VA_ARGS__, __FILE__, __LINE__);\
+            exit(EXIT_FAILURE);                                                            \
+        case ARIS_LOG_WARN:                                                                \
+            fprintf(stdout, "[WARN] "fmt"\n", ##__VA_ARGS__);                              \
+            break;                                                                         \
+        case ARIS_LOG_INFO:                                                                \
+            fprintf(stdout, "[INFO] "fmt"\n", ##__VA_ARGS__);                              \
+            break;                                                                         \
+        default:                                                                           \
+            break;                                                                         \
+        }                                                                                  \
+    } while (0)
 
 
 /*
@@ -612,6 +654,87 @@ char *aris_file_read(const char *filename, Aris_File_Type type)
     return buffer;
 }
 
+static Aris_Mini_Hash_Bucket *aris_hash__find_bucket(Aris_Mini_Hash_Bucket *buckets, uint32_t capacity, uint32_t key)
+{
+    uint32_t index = key % capacity;
+    uint32_t start_index = index;
+
+    for (;;) {
+        if (buckets[index].key == key || buckets[index].key == 0) return &buckets[index];
+        index = (index + 1) % capacity;
+        if (index == start_index) return NULL;
+    }
+}
+
+uint32_t fnv_hash(const char *str, size_t length)
+{
+    uint32_t hash = 2166136261u;
+    for (size_t i = 0; i < length; i++) {
+        hash ^= (uint8_t)str[i];
+        hash *= 16777619;
+    }
+    return hash;
+}
+
+bool aris_hash_expand(Aris_Mini_Hash *lookup, size_t new_capacity)
+{
+    if (new_capacity <= lookup->capacity) return false;
+
+    Aris_Mini_Hash_Bucket *new_buckets = malloc(sizeof(Aris_Mini_Hash_Bucket)*new_capacity);
+    if (!new_buckets) return false;
+    for (uint32_t i = 0; i < new_capacity; i++) new_buckets[i].key = 0;
+
+    for (uint32_t i = 0; i < lookup->capacity; i++) {
+        Aris_Mini_Hash_Bucket *bucket = &lookup->buckets[i];
+        if (bucket->key == 0) continue;
+        Aris_Mini_Hash_Bucket *dest = aris_hash__find_bucket(new_buckets, new_capacity, bucket->key);
+        dest->key = bucket->key;
+        dest->val = bucket->val;
+    }
+
+    lookup->capacity = new_capacity;
+    if (lookup->buckets) free(lookup->buckets);
+    lookup->buckets = new_buckets;
+
+    return true;
+}
+
+bool aris_hash_set(Aris_Mini_Hash *lookup, uint32_t key, uint32_t val)
+{
+    if (lookup->count + 1 > lookup->capacity * ARIS_MINI_HASH_MAX_LOAD) {
+        uint32_t new_capacity = lookup->capacity < 16 ? 16 : 2*lookup->capacity;
+        if (!aris_hash_expand(lookup, new_capacity)) return false;
+    }
+
+    Aris_Mini_Hash_Bucket *bucket = aris_hash__find_bucket(lookup->buckets, lookup->capacity, key);
+    if (!bucket) return false;
+
+    bucket->key = key;
+    bucket->val = val;
+    lookup->count++;
+
+    return true;
+}
+
+bool aris_hash_get(Aris_Mini_Hash *lookup, uint32_t key, uint32_t *out_val)
+{
+    if (lookup->count == 0) return false;
+
+    Aris_Mini_Hash_Bucket *bucket = aris_hash__find_bucket(lookup->buckets, lookup->capacity, key);
+    if (!bucket) return false;
+
+    if (out_val) *out_val = bucket->val;
+    return true;
+}
+
+void aris_hash_free(Aris_Mini_Hash *lookup)
+{
+    if (lookup->buckets) free(lookup->buckets);
+    lookup->buckets = NULL;
+    lookup->capacity = 0;
+    lookup->count = 0;
+}
+
 #endif /* ARIS_IMPLEMENTATION */
 
 #ifdef ARIS_STRIP_PREFIX
@@ -679,10 +802,12 @@ char *aris_file_read(const char *filename, Aris_File_Type type)
 #define string_has_prefix  aris_string_has_prefix
 #define string_has_postfix aris_string_has_postfix
 
-#define TODO               ARIS_TODO
-#define UNREACHABLE        ARIS_UNREACHABLE
-#define FATAL              ARIS_FATAL
-#define ERROR              ARIS_ERROR
+#define hash_expand        aris_hash_expand
+#define hash_set           aris_hash_set
+#define hash_get           aris_hash_get
+#define hash_free          aris_hash_free
+
+#define log                aris_log
 
 #define UNUSED             ARIS_UNUSED
 
