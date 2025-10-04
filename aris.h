@@ -33,17 +33,18 @@ LICENSE:
 #include <string.h>
 #include <stdarg.h>
 #include <stdbool.h>
+#include <ctype.h>
 #include <assert.h>
 
 /*
  * dynamic array
  */
-typedef struct aris_vector_header {
+typedef struct Aris_Vector_Header {
     size_t size;
     size_t capacity;
-} aris_vector_header ;
+} Aris_Vector_Header;
 
-#define aris_vec_header(vec)   ((aris_vector_header*)((char*)(vec) - sizeof(aris_vector_header)))
+#define aris_vec_header(vec)   ((Aris_Vector_Header*)((char*)(vec) - sizeof(Aris_Vector_Header)))
 #define aris_vec_size(vec)     ((vec) ? aris_vec_header(vec)->size : 0)
 #define aris_vec_capacity(vec) ((vec) ? aris_vec_header(vec)->capacity : 0)
 #define aris_vec_push(vec, item)                               \
@@ -64,7 +65,13 @@ typedef struct aris_vector_header {
     do {                                         \
         if (vec) aris_vec_header(vec)->size = 0; \
     } while (0)
-#define aris_vec_foreach(type, vec, it) for (type *it = (vec); it < (vec)+aris_vec_size(vec); it++)
+#define aris_vec_foreach(type, vec, iter) for (type *iter = (vec); iter < (vec)+aris_vec_size(vec); iter++)
+#define aris_vec_swap_delete(vec, deleted_index)          \
+    do {                                                  \
+        if (aris_vec_isempty(vec)) break;                 \
+        if ((deleted_index) >= aris_vec_size(vec)) break; \
+        (vec)[deleted_index] = aris_vec_pop(vec);         \
+    } while (0)
 void *aris_vec_grow(void *vec, size_t item_size);
 
 
@@ -72,25 +79,20 @@ void *aris_vec_grow(void *vec, size_t item_size);
  * static array
  */
 #define aris_arr_len(arr) (sizeof(arr)/sizeof(arr[0]))
-#define aris_arr_foreach(type, arr, it) for (type *it = (arr); it < (arr)+aris_arr_len(arr); it++)
-
-
-/*
- * hash table
- */
+#define aris_arr_foreach(type, arr, iter) for (type *iter = (arr); iter < (arr)+aris_arr_len(arr); iter++)
 
 
 /*
  * deque
  */
-typedef struct aris_deque_header {
+typedef struct Aris_Deque_Header {
     size_t size;
     size_t capacity;
     size_t front;
     size_t rear;
-} aris_deque_header;
+} Aris_Deque_Header;
 
-#define aris_deq_header(deq)   ((aris_deque_header*)((char*)(deq) - sizeof(aris_deque_header)))
+#define aris_deq_header(deq)   ((Aris_Deque_Header*)((char*)(deq) - sizeof(Aris_Deque_Header)))
 #define aris_deq_size(deq)     ((deq) ? aris_deq_header(deq)->size : 0)
 #define aris_deq_capacity(deq) ((deq) ? aris_deq_header(deq)->capacity : 0)
 #define aris_deq_front(deq)    ((deq) ? aris_deq_header(deq)->front : 0)
@@ -172,21 +174,21 @@ void *aris_deq_grow(void *deq, size_t item_size);
 /*
  * double linked list
  */
-typedef struct aris_list_node {
-    struct aris_list_node *prev;
-    struct aris_list_node *next;
-} aris_list_node;
+typedef struct Aris_List_Node {
+    struct Aris_List_Node *prev;
+    struct Aris_List_Node *next;
+} Aris_List_Node;
 
-typedef struct aris_list {
-    aris_list_node head; /* dummy head */
+typedef struct Aris_List {
+    Aris_List_Node head; /* dummy head */
     size_t size;
-} aris_list;
+} Aris_List;
 
-#define ARIS_INSTRUSIVE_LIST_NODE             aris_list_node node
-#define ARIS_LIST_NODE_INITIALIZER            ((aris_list_node){NULL, NULL})
-#define ARIS_LIST_INITIALIZER(name)           ((aris_list){.head = {&name.head, &name.head}, .size = 0})
+#define ARIS_INSTRUSIVE_LIST_NODE             Aris_List_Node node
+#define ARIS_LIST_NODE_INITIALIZER            ((Aris_List_Node){NULL, NULL})
+#define ARIS_LIST_INITIALIZER(name)           ((Aris_List){.head = {&name.head, &name.head}, .size = 0})
 #define ARIS_LIST_ITEM_INITIALIZER(type, ...) ((type){__VA_ARGS__, .node = LIST_NODE_INITIALIZER})
-#define aris_list_init(name)                  aris_list name = LIST_INITIALIZER(name)
+#define aris_list_init(name)                  Aris_List name = LIST_INITIALIZER(name)
 #define aris_list_size(list)                  ((list)->size)
 #define aris_list_head(type, list)            list_to_item(type, (list)->head.next)
 #define aris_list_tail(type, list)            list_to_item(type, (list)->head.prev)
@@ -218,7 +220,7 @@ typedef struct aris_list {
 #define aris_list_del_head(list)                                      \
     do {                                                              \
         if ((list)->size == 0) break;                                 \
-        aris_list_node *head = (list)->head.next;                     \
+        Aris_List_Node *head = (list)->head.next;                     \
         aris_list_node__del(&(list)->head, (list)->head.next->next);  \
         head->next = head;                                            \
         head->prev = head;                                            \
@@ -227,7 +229,7 @@ typedef struct aris_list {
 #define aris_list_del_tail(list);                                     \
     do {                                                              \
         if ((list)->size == 0) break;                                 \
-        aris_list_node *tail = (list)->head.prev;                     \
+        Aris_List_Node *tail = (list)->head.prev;                     \
         aris_list_node__del((list)->head.prev->prev, &(list)->head);  \
         tail->next = tail;                                            \
         tail->prev = tail;                                            \
@@ -248,13 +250,13 @@ typedef struct aris_list {
 #define aris_list_ishead(list, item)       ((item)->node.prev == &(list)->head)
 #define aris_list_istail(list, item)       ((item)->node.next == &(list)->head)
 #define aris_list_foreach(type, list, iter)                                            \
-    for (aris_list_node *current = (list)->head.next, *next = (list)->head.next->next; \
-         current != (aris_list_node*)(list);                                           \
+    for (Aris_List_Node *current = (list)->head.next, *next = (list)->head.next->next; \
+         current != (Aris_List_Node*)(list);                                           \
          current = next, next = next->next)                                            \
         for (type *iter = aris_list_to_item(type, current); iter != NULL; iter = NULL)
 #define aris_list_foreach_reverse(type, list, iter)                                    \
-    for (aris_list_node *current = (list)->head.prev, *prev = (list)->head.prev->prev; \
-         current != (aris_list_node*)(list);                                           \
+    for (Aris_List_Node *current = (list)->head.prev, *prev = (list)->head.prev->prev; \
+         current != (Aris_List_Node*)(list);                                           \
          current = prev, prev = prev->prev)                                            \
         for (type *iter = aris_list_to_item(type, current); iter != NULL; iter = NULL)
 #define aris_list_reset(list)              \
@@ -263,8 +265,8 @@ typedef struct aris_list {
         (list)->head.next = &(list)->head; \
         (list)->size = 0;                  \
     } while (0)
-void aris_list_node__add(aris_list_node *new_node, aris_list_node *prev_node, aris_list_node *next_node);
-void aris_list_node__del(aris_list_node *prev_node, aris_list_node *next_node);
+void aris_list_node__add(Aris_List_Node *new_node, Aris_List_Node *prev_node, Aris_List_Node *next_node);
+void aris_list_node__del(Aris_List_Node *prev_node, Aris_List_Node *next_node);
 
 
 /*
@@ -273,6 +275,8 @@ void aris_list_node__del(aris_list_node *prev_node, aris_list_node *next_node);
 char *aris_string_tmp_format(const char *fmt, ...);
 void aris_string_reverse(char *s);
 char *aris_string_tmp_reverse(const char *s);
+void aris_string_trim(char *s);
+char *aris_string_tmp_trim(const char *s);
 bool aris_string_has_prefix(const char *s, const char *prefix);
 bool aris_string_has_postfix(const char *s, const char *postfix);
 
@@ -302,10 +306,10 @@ bool aris_string_has_postfix(const char *s, const char *postfix);
 /*
  * file
  */
-typedef enum aris_file_type {
+typedef enum Aris_File_Type {
     ARIS_TEXT_FILE,
     ARIS_BINARY_FILE
-} aris_file_type ;
+} Aris_File_Type ;
 
 #define aris_file_size(buffer) ((buffer)                              \
                        ? *(size_t*)((char*)(buffer) - sizeof(size_t)) \
@@ -317,7 +321,7 @@ typedef enum aris_file_type {
         free(p_alloc);                                    \
         (buffer) = NULL;                                  \
     } while (0)
-char *aris_file_read(const char *filename, aris_file_type type);
+char *aris_file_read(const char *filename, Aris_File_Type type);
 
 
 /*
@@ -357,11 +361,11 @@ char *aris_file_read(const char *filename, aris_file_type type);
 void *aris_vec_grow(void *vec, size_t item_size)
 {
     size_t new_capacity, alloc_size;
-    aris_vector_header *new_header;
+    Aris_Vector_Header *new_header;
 
     new_capacity = aris_vec_capacity(vec) < 16
                    ? 16 : 2 * aris_vec_capacity(vec);
-    alloc_size = sizeof(aris_vector_header) + new_capacity*item_size;
+    alloc_size = sizeof(Aris_Vector_Header) + new_capacity*item_size;
 
     if (vec) {
         new_header = realloc(aris_vec_header(vec), alloc_size);
@@ -373,18 +377,18 @@ void *aris_vec_grow(void *vec, size_t item_size)
     }
     new_header->capacity = new_capacity;
 
-    return (void*)((char*)new_header + sizeof(aris_vector_header));
+    return (void*)((char*)new_header + sizeof(Aris_Vector_Header));
 }
 
 void *aris_deq_grow(void *deq, size_t item_size)
 {
     size_t new_capacity, alloc_size;
-    aris_deque_header *new_header;
+    Aris_Deque_Header *new_header;
     void *new_deq;
 
     new_capacity = aris_deq_capacity(deq) < 16
                    ? 16 : 2 * aris_deq_capacity(deq);
-    alloc_size = sizeof(aris_deque_header) + new_capacity*item_size;
+    alloc_size = sizeof(Aris_Deque_Header) + new_capacity*item_size;
 
     new_header = malloc(alloc_size);
     assert(new_header != NULL && "out of memory");
@@ -422,7 +426,7 @@ void *aris_deq_grow(void *deq, size_t item_size)
     return new_deq;
 }
 
-void aris_list_node__add(aris_list_node *new_node, aris_list_node *prev_node, aris_list_node *next_node)
+void aris_list_node__add(Aris_List_Node *new_node, Aris_List_Node *prev_node, Aris_List_Node *next_node)
 {
     aris_list_node_init(new_node);
     aris_list_node_init(prev_node);
@@ -434,7 +438,7 @@ void aris_list_node__add(aris_list_node *new_node, aris_list_node *prev_node, ar
     new_node->prev = prev_node;
 }
 
-void aris_list_node__del(aris_list_node *prev_node, aris_list_node *next_node)
+void aris_list_node__del(Aris_List_Node *prev_node, Aris_List_Node *next_node)
 {
     prev_node->next = next_node;
     next_node->prev = prev_node;
@@ -496,6 +500,54 @@ char *aris_string_tmp_reverse(const char *s)
     return _tmp_buffer;
 }
 
+void aris_string_trim(char *s)
+{
+    if (!s) return;
+
+    const char *start, *end;
+    size_t len;
+
+    start = s;
+    end = s + strlen(s) - 1;
+
+    while (true) {
+        if (isspace(*start)) start++;
+        if (isspace(*end)) end--;
+        if (!isspace(*start) && !isspace(*end)) break;
+        if (start > end) return;
+    }
+
+    len = end - start + 1;
+    for (size_t i = 0; i < len; i++) {
+        s[i] = *start++;
+    }
+    s[len] = '\0';
+}
+
+char *aris_string_tmp_trim(const char *s)
+{
+    if (!s) return NULL;
+
+    const char *start, *end;
+    size_t len;
+
+    start = s;
+    end = s + strlen(s) - 1;
+
+    while (true) {
+        if (isspace(*start)) start++;
+        if (isspace(*end)) end--;
+        if (!isspace(*start) && !isspace(*end)) break;
+        if (start > end) return NULL;
+    }
+
+    len = end - start + 1;
+    if (len >= ARIS_TMP_BUFFER_SIZE) len = ARIS_TMP_BUFFER_SIZE - 1;
+    snprintf(_tmp_buffer, ARIS_TMP_BUFFER_SIZE, "%.*s", (int)len, start);
+
+    return _tmp_buffer;
+}
+
 bool aris_string_has_prefix(const char *s, const char *prefix)
 {
     if (!s || !prefix) return false;
@@ -523,7 +575,7 @@ bool aris_string_has_postfix(const char *s, const char *postfix)
     return memcmp(s + s_len - postfix_len, postfix, postfix_len) == 0;
 }
 
-char *aris_file_read(const char *filename, aris_file_type type)
+char *aris_file_read(const char *filename, Aris_File_Type type)
 {
     FILE *f;
     char *p_alloc;
@@ -622,6 +674,8 @@ char *aris_file_read(const char *filename, aris_file_type type)
 #define string_tmp_format  aris_string_tmp_format
 #define string_reverse     aris_string_reverse
 #define string_tmp_reverse aris_string_tmp_reverse
+#define string_trim        aris_string_trim
+#define string_tmp_trim    aris_string_tmp_trim
 #define string_has_prefix  aris_string_has_prefix
 #define string_has_postfix aris_string_has_postfix
 

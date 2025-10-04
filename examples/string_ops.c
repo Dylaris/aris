@@ -19,12 +19,16 @@ int main(void)
     printf("Original: %s → Reversed: %s\n", original, reversed);
 
     // 4. Prefix check
-    printf("Has prefix 'Hello': %d\n",
-           aris_string_has_prefix("Hello world", "Hello"));
+    printf("Has prefix 'Hello': %d\n", aris_string_has_prefix("Hello world", "Hello"));
 
     // 5. Postfix check
-    printf("Has postfix 'world': %d\n",
-           aris_string_has_postfix("Hello world", "world"));
+    printf("Has postfix 'world': %d\n", aris_string_has_postfix("Hello world", "world"));
+
+    // 6. Trim whitespace
+    char s[] = "  \thello world\n\t\t  ";
+    printf("Trim whitespace: '%s'\n", aris_string_tmp_trim(s));
+    aris_string_trim(s);
+    printf("Trim whitespace: '%s'\n", s);
 
     return 0;
 }
