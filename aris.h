@@ -355,7 +355,7 @@ typedef enum Aris_File_Type {
 
 typedef struct Aris_File_Line {
     const char *start;
-    size_t size;
+    size_t length;
     size_t number;
 } Aris_File_Line;
 
@@ -767,7 +767,7 @@ void aris_file_split(const char *source)
         if (*current == '\n') {
             Aris_File_Line line = {
                 .start  = start,
-                .size   = current - start,
+                .length = current - start,
                 .number = ++line_number
             };
             aris_vec_push(lines, line);

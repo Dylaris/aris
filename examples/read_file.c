@@ -13,7 +13,7 @@ int main(void)
     printf("nlines: %zu\n", file_nlines(source));
 
     file_foreach(source, line) {
-        printf("[%zu] %.*s\n", line->number, (int)line->size, line->start);
+        printf("[%zu] %.*s\n", line->number, (int)line->length, line->start);
         if (line->number >= 10) break;
     }
 
