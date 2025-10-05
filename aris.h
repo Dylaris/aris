@@ -351,19 +351,37 @@ typedef enum Aris_Log_Level {
 typedef enum Aris_File_Type {
     ARIS_TEXT_FILE,
     ARIS_BINARY_FILE
-} Aris_File_Type ;
+} Aris_File_Type;
 
-#define aris_file_size(buffer) ((buffer)                              \
-                       ? *(size_t*)((char*)(buffer) - sizeof(size_t)) \
-                       : (size_t)0)
-#define aris_file_free(buffer)                            \
-    do {                                                  \
-        if (!buffer) break;                               \
-        char *p_alloc = (char*)(buffer) - sizeof(size_t); \
-        free(p_alloc);                                    \
-        (buffer) = NULL;                                  \
+typedef struct Aris_File_Line {
+    const char *start;
+    size_t size;
+    size_t number;
+} Aris_File_Line;
+
+typedef struct Aris_File_Header {
+    size_t size;
+    Aris_File_Line *lines;
+    char source[];
+} Aris_File_Header;
+
+#define aris_file_header(file)   aris_container_of(file, Aris_File_Header, source)
+#define aris_file_size(file)     ((file) ? aris_file_header(file)->size : 0)
+#define aris_file_lines(file) ((file) ? aris_file_header(file)->lines : NULL)
+#define aris_file_free(file)                            \
+    do {                                                \
+        if (!(file)) break;                             \
+        Aris_File_Header *hdr = aris_file_header(file); \
+        if (hdr->lines) aris_vec_free(hdr->lines);      \
+        free(hdr);                                      \
+        (file) = NULL;                                  \
     } while (0)
-char *aris_file_read(const char *filename, Aris_File_Type type);
+#define aris_file_nlines(file) aris_vec_size(aris_file_lines(file))
+#define aris_file_foreach(file, iter) \
+    for (Aris_File_Line *iter = aris_file_lines(file); iter < aris_file_lines(file)+aris_file_nlines(file); iter++)
+
+const char *aris_file_read(const char *filename, Aris_File_Type type);
+void aris_file_split(const char *source);
 
 
 /*
@@ -617,43 +635,6 @@ bool aris_string_has_postfix(const char *s, const char *postfix)
     return memcmp(s + s_len - postfix_len, postfix, postfix_len) == 0;
 }
 
-char *aris_file_read(const char *filename, Aris_File_Type type)
-{
-    FILE *f;
-    char *p_alloc;
-    char *mode; /* file open mode */
-    char *buffer;
-    long size;
-
-    switch (type) {
-    case ARIS_TEXT_FILE:   mode = "r";  break;
-    case ARIS_BINARY_FILE: mode = "rb"; break;
-    default:               return NULL;
-    }
-
-    f = fopen(filename, mode);
-    if (!f) return NULL;
-
-    fseek(f, 0L, SEEK_END);
-    size = ftell(f);
-    rewind(f);
-
-    p_alloc = malloc(sizeof(size_t) + size + 1);
-    if (!p_alloc) return NULL;
-    *(size_t*)p_alloc = (size_t)size;
-
-    buffer = p_alloc + sizeof(size_t);
-    if (fread(buffer, size, 1, f) != 1) {
-        free(p_alloc);
-        fclose(f);
-        return NULL;
-    }
-    buffer[size] = '\0';
-
-    fclose(f);
-    return buffer;
-}
-
 static Aris_Mini_Hash_Bucket *aris_hash__find_bucket(Aris_Mini_Hash_Bucket *buckets, uint32_t capacity, uint32_t key)
 {
     uint32_t index = key % capacity;
@@ -733,6 +714,69 @@ void aris_hash_free(Aris_Mini_Hash *lookup)
     lookup->buckets = NULL;
     lookup->capacity = 0;
     lookup->count = 0;
+}
+
+const char *aris_file_read(const char *filename, Aris_File_Type type)
+{
+#define return_defer(flag) do { ok = flag; goto defer; } while (0)
+    FILE *f = NULL;
+    Aris_File_Header *header = NULL;
+    const char *mode; /* file open mode */
+    long size;
+    bool ok = true;
+
+    switch (type) {
+    case ARIS_TEXT_FILE:   mode = "r";  break;
+    case ARIS_BINARY_FILE: mode = "rb"; break;
+    default:               return NULL;
+    }
+
+    f = fopen(filename, mode);
+    if (!f) return NULL;
+
+    fseek(f, 0L, SEEK_END);
+    size = ftell(f);
+    rewind(f);
+
+    header = malloc(sizeof(Aris_File_Header) + size + 1);
+    if (!header) return_defer(false);
+    header->size = size;
+    header->lines = NULL;
+
+    if (fread(header->source, size, 1, f) != 1) return_defer(false);
+    header->source[size] = '\0';
+
+defer:
+    if (f) fclose(f);
+    if (!ok) {
+        if (header) free(header);
+        return NULL;
+    }
+    return header->source;
+#undef return_defer
+}
+
+void aris_file_split(const char *source)
+{
+    const char *start = source;
+    const char *current = start;
+    size_t line_number = 0;
+    Aris_File_Line *lines = aris_file_header(source)->lines;
+
+    while (*current) {
+        if (*current == '\n') {
+            Aris_File_Line line = {
+                .start  = start,
+                .size   = current - start,
+                .number = ++line_number
+            };
+            aris_vec_push(lines, line);
+            start = current + 1;
+        }
+        current++;
+    }
+
+    aris_file_header(source)->lines = lines;
 }
 
 #endif /* ARIS_IMPLEMENTATION */
@@ -823,9 +867,14 @@ void aris_hash_free(Aris_Mini_Hash *lookup)
 #define offset_of          aris_offset_of
 #define container_of       aris_container_of
 
+#define file_header        aris_file_header
 #define file_size          aris_file_size
+#define file_lines         aris_file_lines
 #define file_free          aris_file_free
+#define file_nlines        aris_file_nlines
+#define file_foreach       aris_file_foreach
 #define file_read          aris_file_read
+#define file_split         aris_file_split
 
 #endif /* ARIS_STRIP_PREFIX */
 

@@ -1,18 +1,23 @@
 #define ARIS_IMPLEMENTATION
+#define ARIS_STRIP_PREFIX
 #include "aris.h"
-
-#include <assert.h>
 
 int main(void)
 {
-    assert(aris_file_read("text", ARIS_TEXT_FILE) == NULL);
+    assert(file_read("text", ARIS_TEXT_FILE) == NULL);
 
-    char *content;
+    const char *source = file_read(__FILE__, ARIS_TEXT_FILE);
+    printf("size: %zu\ncontent: %s", file_size(source), source);
 
-    content = aris_file_read(__FILE__, ARIS_TEXT_FILE);
-    printf("size: %zu\ncontent: %s", aris_file_size(content), content);
+    file_split(source);
+    printf("nlines: %zu\n", file_nlines(source));
 
-    aris_file_free(content);
+    file_foreach(source, line) {
+        printf("[%zu] %.*s\n", line->number, (int)line->size, line->start);
+        if (line->number >= 10) break;
+    }
+
+    file_free(source);
 
     return 0;
 }
