@@ -1,4 +1,4 @@
-# aris.h
+# aris
 
 ## Brief
 
