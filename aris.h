@@ -348,11 +348,6 @@ typedef enum Aris_Log_Level {
 /*
  * file
  */
-typedef enum Aris_File_Type {
-    ARIS_TEXT_FILE,
-    ARIS_BINARY_FILE
-} Aris_File_Type;
-
 typedef struct Aris_File_Line {
     const char *start;
     size_t length;
@@ -380,7 +375,7 @@ typedef struct Aris_File_Header {
 #define aris_file_foreach(file, iter) \
     for (Aris_File_Line *iter = aris_file_lines(file); iter < aris_file_lines(file)+aris_file_nlines(file); iter++)
 
-const char *aris_file_read(const char *filename, Aris_File_Type type);
+const char *aris_file_read(const char *filename);
 void aris_file_split(const char *source);
 
 
@@ -702,7 +697,7 @@ bool aris_hash_get(Aris_Mini_Hash *lookup, uint32_t key, uint32_t *out_val)
     if (lookup->count == 0) return false;
 
     Aris_Mini_Hash_Bucket *bucket = aris_hash__find_bucket(lookup->buckets, lookup->capacity, key);
-    if (!bucket) return false;
+    if (!bucket || bucket->key != key) return false;
 
     if (out_val) *out_val = bucket->val;
     return true;
@@ -716,22 +711,15 @@ void aris_hash_free(Aris_Mini_Hash *lookup)
     lookup->count = 0;
 }
 
-const char *aris_file_read(const char *filename, Aris_File_Type type)
+const char *aris_file_read(const char *filename)
 {
 #define return_defer(flag) do { ok = flag; goto defer; } while (0)
     FILE *f = NULL;
     Aris_File_Header *header = NULL;
-    const char *mode; /* file open mode */
     long size;
     bool ok = true;
 
-    switch (type) {
-    case ARIS_TEXT_FILE:   mode = "r";  break;
-    case ARIS_BINARY_FILE: mode = "rb"; break;
-    default:               return NULL;
-    }
-
-    f = fopen(filename, mode);
+    f = fopen(filename, "rb");
     if (!f) return NULL;
 
     fseek(f, 0L, SEEK_END);
@@ -770,6 +758,7 @@ void aris_file_split(const char *source)
                 .length = current - start,
                 .number = ++line_number
             };
+            if (current - 1 >= start && current[-1] == '\r') line.length--;
             aris_vec_push(lines, line);
             start = current + 1;
         }

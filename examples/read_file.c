@@ -4,9 +4,9 @@
 
 int main(void)
 {
-    assert(file_read("text", ARIS_TEXT_FILE) == NULL);
+    assert(file_read("text") == NULL);
 
-    const char *source = file_read(__FILE__, ARIS_TEXT_FILE);
+    const char *source = file_read(__FILE__);
     printf("size: %zu\ncontent: %s", file_size(source), source);
 
     file_split(source);
