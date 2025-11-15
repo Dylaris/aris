@@ -1,5 +1,6 @@
 #define COOK_IMPLEMENTATION
 #include "cook.h"
+#include <stdio.h>
 
 int main(void)
 {

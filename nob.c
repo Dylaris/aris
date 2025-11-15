@@ -6,20 +6,12 @@
 #define EXAMPLE_FOLDER "examples/"
 
 static const char *example_src[] = {
-    EXAMPLE_FOLDER"deque.c",
     EXAMPLE_FOLDER"dynamic_array.c",
-    EXAMPLE_FOLDER"log.c",
-    EXAMPLE_FOLDER"read_file.c",
-    EXAMPLE_FOLDER"string_ops.c",
     EXAMPLE_FOLDER"mini_hash.c"
 };
 
 static const char *example_exe[] = {
-    EXAMPLE_FOLDER"deque",
     EXAMPLE_FOLDER"dynamic_array",
-    EXAMPLE_FOLDER"log",
-    EXAMPLE_FOLDER"read_file",
-    EXAMPLE_FOLDER"string_ops",
     EXAMPLE_FOLDER"mini_hash"
 };
 

@@ -1,6 +1,8 @@
 #define COOK_IMPLEMENTATION
 #define COOK_STRIP_PREFIX
 #include "cook.h"
+#include <string.h>
+#include <stdio.h>
 
 typedef struct Student {
     uint32_t id;

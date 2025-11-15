@@ -2,7 +2,7 @@
 
 ## Brief
 
-My own stb-style C library (uses C99) for daily use.
+Small C containers (vector and hash table) implemented using C99.
 
 ## Usage
 
