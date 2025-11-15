@@ -8,7 +8,6 @@
 static const char *example_src[] = {
     EXAMPLE_FOLDER"deque.c",
     EXAMPLE_FOLDER"dynamic_array.c",
-    EXAMPLE_FOLDER"list.c",
     EXAMPLE_FOLDER"log.c",
     EXAMPLE_FOLDER"read_file.c",
     EXAMPLE_FOLDER"string_ops.c",
@@ -18,7 +17,6 @@ static const char *example_src[] = {
 static const char *example_exe[] = {
     EXAMPLE_FOLDER"deque",
     EXAMPLE_FOLDER"dynamic_array",
-    EXAMPLE_FOLDER"list",
     EXAMPLE_FOLDER"log",
     EXAMPLE_FOLDER"read_file",
     EXAMPLE_FOLDER"string_ops",

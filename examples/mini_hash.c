@@ -1,6 +1,6 @@
-#define ARIS_IMPLEMENTATION
-#define ARIS_STRIP_PREFIX
-#include "aris.h"
+#define COOK_IMPLEMENTATION
+#define COOK_STRIP_PREFIX
+#include "cook.h"
 
 typedef struct Student {
     uint32_t id;
@@ -32,8 +32,8 @@ static Student students[] = {
 
 int main(void)
 {
-    Aris_Mini_Hash name_lookup = {0};
-    Aris_Mini_Hash id_lookup = {0};
+    Cook_Mini_Hash name_lookup = {0};
+    Cook_Mini_Hash id_lookup = {0};
 
     // build hash table
     for (size_t i = 0; i < sizeof(students)/sizeof(students[0]); i++) {

@@ -1,6 +1,6 @@
-#define ARIS_IMPLEMENTATION
-#define ARIS_STRIP_PREFIX
-#include "aris.h"
+#define COOK_IMPLEMENTATION
+#define COOK_STRIP_PREFIX
+#include "cook.h"
 
 int main(void)
 {
