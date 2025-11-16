@@ -4,8 +4,18 @@
 #include <string.h>
 #include <stdio.h>
 
+size_t fnv_hash(const char *str, size_t length)
+{
+    size_t hash = 2166136261u;
+    for (size_t i = 0; i < length; i++) {
+        hash ^= (unsigned char)str[i];
+        hash *= 16777619;
+    }
+    return hash;
+}
+
 typedef struct Student {
-    uint32_t id;
+    size_t id;
     const char *name;
 } Student;
 
@@ -40,28 +50,28 @@ int main(void)
     // build hash table
     for (size_t i = 0; i < sizeof(students)/sizeof(students[0]); i++) {
         Student *student = &students[i];
-        if (!hash_set(&name_lookup, student->id, (uint32_t)i)) return 1;
+        if (!hash_set(&name_lookup, student->id, i)) return 1;
         if (!hash_set(&id_lookup, fnv_hash(student->name, strlen(student->name)), student->id)) return 1;
     }
 
     const char *name;
-    uint32_t id, index;
+    size_t id, index;
 
     name = "Michael Lopez";
     if (!hash_get(&id_lookup, fnv_hash(name, strlen(name)), &id)) return 1;
-    printf("ID of '%s' is: %u\n", name, id);
+    printf("ID of '%s' is: %zu\n", name, id);
 
     name = "David Thomas";
     if (!hash_get(&id_lookup, fnv_hash(name, strlen(name)), &id)) return 1;
-    printf("ID of '%s' is: %u\n", name, id);
+    printf("ID of '%s' is: %zu\n", name, id);
 
     id = 1003;
     if (!hash_get(&name_lookup, id, &index)) return 1;
-    printf("Name of %u is: %s\n", id, students[index].name);
+    printf("Name of %zu is: %s\n", id, students[index].name);
 
     id = 1010;
     if (!hash_get(&name_lookup, id, &index)) return 1;
-    printf("Name of %u is: %s\n", id, students[index].name);
+    printf("Name of %zu is: %s\n", id, students[index].name);
 
     hash_free(&name_lookup);
     hash_free(&id_lookup);

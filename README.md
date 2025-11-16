@@ -2,7 +2,7 @@
 
 ## Brief
 
-Small C containers (vector and hash table) implemented using C99.
+Pieces of C implemented using C99.
 
 ## Usage
 

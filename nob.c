@@ -7,11 +7,17 @@
 
 static const char *example_src[] = {
     EXAMPLE_FOLDER"dynamic_array.c",
+    EXAMPLE_FOLDER"temp_allocator.c",
+    EXAMPLE_FOLDER"string_view.c",
+    EXAMPLE_FOLDER"string_builder.c",
     EXAMPLE_FOLDER"mini_hash.c"
 };
 
 static const char *example_exe[] = {
     EXAMPLE_FOLDER"dynamic_array",
+    EXAMPLE_FOLDER"temp_allocator",
+    EXAMPLE_FOLDER"string_view",
+    EXAMPLE_FOLDER"string_builder",
     EXAMPLE_FOLDER"mini_hash"
 };
 
