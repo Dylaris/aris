@@ -10,7 +10,6 @@ static const char *example_src[] = {
     EXAMPLE_FOLDER"temp_allocator.c",
     EXAMPLE_FOLDER"string_view.c",
     EXAMPLE_FOLDER"string_builder.c",
-    EXAMPLE_FOLDER"mini_hash.c"
 };
 
 static const char *example_exe[] = {
@@ -18,10 +17,9 @@ static const char *example_exe[] = {
     EXAMPLE_FOLDER"temp_allocator",
     EXAMPLE_FOLDER"string_view",
     EXAMPLE_FOLDER"string_builder",
-    EXAMPLE_FOLDER"mini_hash"
 };
 
-bool clear(void)
+bool clean(void)
 {
     for (size_t i = 0; i < ARRAY_LEN(example_exe); i++) {
         if (!nob_delete_file(example_exe[i])) return false;
@@ -32,8 +30,8 @@ int main(int argc, char **argv)
 {
     NOB_GO_REBUILD_URSELF(argc, argv);
 
-    if (argc > 1 && strcmp(argv[1], "clear") == 0) {
-        return clear() == true;
+    if (argc > 1 && strcmp(argv[1], "clean") == 0) {
+        return clean() == true;
     }
 
     for (size_t i = 0; i < ARRAY_LEN(example_src); i++) {
@@ -42,6 +40,7 @@ int main(int argc, char **argv)
         cmd_append(&cmd, "-Wall", "-Wextra");
         cmd_append(&cmd, "-std=c99");
         cmd_append(&cmd, "-I./");
+        cmd_append(&cmd, "-ggdb");
         cmd_append(&cmd, "-o", example_exe[i], example_src[i]);
         if (!cmd_run(&cmd)) return 1;
     }

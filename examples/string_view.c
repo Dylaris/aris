@@ -4,7 +4,7 @@
 
 int main(void)
 {
-    Cook_String_View sv;
+    cook_string_view_t sv;
 
     sv = sv_from_cstr(" Hello, World  ");
     printf("sv = '"SV_FMT"'\n", SV_ARG(sv));

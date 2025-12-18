@@ -4,8 +4,10 @@
 
 int main(void)
 {
-    cook_temp_scope(1) {
-        cook_temp_scope(2) {
+    size_t checkpoint;
+    checkpoint = cook_temp_save();
+        {
+            checkpoint = cook_temp_save();
             void *start1 = cook_temp_alloc(100);
             printf("start1 = %p\n", start1);
             const char *p1 = cook_temp_strdup("Hello, World");
@@ -16,10 +18,13 @@ int main(void)
             printf("scope: p3 = %s\n", p3);
             const char *p4 = cook_temp_strfmt("name = %s\nage = %d", "aris", 1);
             printf("scope: p4 = %s\n", p4);
+            cook_temp_rewind(checkpoint);
         }
+
         void *start2 = cook_temp_alloc(200);
         printf("start2 = %p\n", start2);
-    }
+    cook_temp_rewind(checkpoint);
+
     void *p1 = cook_temp_alloc(100);
     printf("p1 = %p\n", p1);
     cook_temp_reset();

@@ -4,9 +4,9 @@
 
 Pieces of C implemented using C99.
 
-## Usage
+## Quick Start
 
-For more details, please refer to the examples.
+For more details, please refer to the examples and source code.
 
 - build examples
 
