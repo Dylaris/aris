@@ -18,7 +18,7 @@ USAGE:
   In other files, just include the header without the macro.
 
 HISTORY:
-    v0.07 Remote 'mini hash table'
+    v0.07 Remove 'mini hash table'
     v0.06 Support 'temp allocator', 'string view', 'string builder'
     v0.05 Remove 'list', 'deque', 'string', 'file'
     v0.04 Support data-structure 'mini hash table'
@@ -59,12 +59,12 @@ LICENSE:
 #define COOK_ASSERT(x) assert(x)
 #endif
 
-#ifndef COOK_VECTOR_INIT_CAPACITY
-#define COOK_VECTOR_INIT_CAPACITY 16
+#ifndef COOK_INIT_CAP
+#define COOK_INIT_CAP 128
 #endif
 
-#ifndef COOK_TEMP_BUFFER_CAPACITY
-#define COOK_TEMP_BUFFER_CAPACITY (1024*8)
+#ifndef COOK_TEMP_BUFFER_CAP
+#define COOK_TEMP_BUFFER_CAP (1024*8)
 #endif
 
 //====================================================
@@ -82,22 +82,27 @@ LICENSE:
 //    - Avoid: function calls (func()), increment/decrement (var++)
 //    - Prefer: simple variables, literal values/ When you use the macros, you need to check if it is valid.
 
+//////////////////////////////////////////////////////
+/////////////////////// small utils
+//////////////////////////////////////////////////////
+
+#define cook_swap(a, b) do { (a) ^= (b); (b) ^= (a); (a) ^= (b); } while (0)
 
 //////////////////////////////////////////////////////
 /////////////////////// static array
 //////////////////////////////////////////////////////
 
-// cook_arr_size - get the vector size from data pointer
+// cook_arr_len - get the vector size from data pointer
 // @arr: array
 //
 // Return: size of array
-#define cook_arr_size(arr) (sizeof(arr)/sizeof(arr[0]))
+#define cook_arr_len(arr) (sizeof(arr)/sizeof(arr[0]))
 
 // cook_arr_end - get the end pointer of array
 // @arr: array
 //
 // Return: pointer past the last element
-#define cook_arr_end(arr) ((arr)+cook_arr_size(arr))
+#define cook_arr_end(arr) ((arr)+cook_arr_len(arr))
 
 // cook_arr_foreach - iterate through array
 // @type: element type of array
@@ -109,188 +114,107 @@ LICENSE:
 //
 // Example:
 // ```
-//     int *numbers = NULL;
-//     ...
 //     cook_arr_foreach(int, numbers, iter) {
 //         printf("%d ", *iter);
 //     }
 // ```
 #define cook_arr_foreach(type, arr, iter) for (type *iter = (arr); iter < cook_arr_end(arr); iter++)
 
+// cook_arr_reverse - reverse all elements in array
+// @arr: array
+#define cook_arr_reverse(arr)                              \
+    do {                                                   \
+        for (size_t left = 0, right = cook_arr_len(arr)-1; \
+                left < right; left++, right--) {           \
+            cook_swap((arr)[left], (arr)[right]);          \
+        }                                                  \
+    } while (0)
+
 //////////////////////////////////////////////////////
 /////////////////////// dynamic array
 //////////////////////////////////////////////////////
 
-typedef struct cook_vector_header {
-    size_t size;
-    size_t capacity;
-} cook_vechdr_t;
-
-#define COOK_VEC_INITIALIZER NULL
-
-// cook_vec_header - get the vector header from data pointer
-// @vec: pointer to vector data
-//
-// Note: This macro performs pointer arithmetic to get the header structure
-//       that precedes the vector data in memory. It's useful for directly
-//       manipulating vector metadata.
+// Before you use the macros about the dynamic array, you
+// need to define the 'struct' with the three fields.
 //
 // Example:
 // ```
-//     int *numbers = NULL; // vector
-//     ...
-//     cook_vec_header(numbers)->size = 0;
-//     cook_vec_header(numbers)->capacity = 0;
+//     typedef struct array {
+//         int *items;
+//         size_t len;
+//         size_t cap;
+//         // other fields
+//     } array_t;
 // ```
-//
-// Return: pointer to the cook_vechdr_t structure
-#define cook_vec_header(vec) ((vec) ? (cook_vechdr_t*)((char*)(vec)-sizeof(cook_vechdr_t)) : NULL)
 
-// cook_vec_size - get the vector size from data pointer
-// @vec: pointer to vector data
-//
-// Return: size of vector
-#define cook_vec_size(vec) ((vec) ? cook_vec_header(vec)->size : 0)
+// cook_vec_reverse - reverse all elements in vector
+// @vec: pointer to vector
+#define cook_vec_reverse(vec)                                   \
+    do {                                                        \
+        for (size_t left = 0, right = (vec)->len-1;             \
+                left < right; left++, right--) {                \
+            cook_swap((vec)->items[left], (vec)->items[right]); \
+        }                                                       \
+    } while (0)
 
-// cook_vec_capacity - get the vector capacity from data pointer
-// @vec: pointer to vector data
-//
-// Return: capacity of vector
-#define cook_vec_capacity(vec) ((vec) ? cook_vec_header(vec)->capacity : 0)
+// cook_vec_grow - grow the vector cap
+// @vec: pointer to vector
+#define cook_vec_grow(vec)                                                      \
+    do {                                                                        \
+        (vec)->cap = (vec)->cap < COOK_INIT_CAP ? COOK_INIT_CAP : 2*(vec)->cap; \
+        (vec)->items = realloc((vec)->items, (vec)->cap*sizeof(*(vec)->items)); \
+        COOK_ASSERT((vec)->items && "out of memory");                           \
+    } while (0)
+
+// cook_vec_free - free the vector
+// @vec: pointer to vector
+#define cook_vec_free(vec)                    \
+    do {                                      \
+        if ((vec)->items) free((vec)->items); \
+        (vec)->items = NULL;                  \
+        (vec)->len = 0;                       \
+        (vec)->cap = 0;                       \
+    } while (0)
 
 // cook_vec_push - push an item to vector
-// @vec: pointer to vector data
+// @vec: pointer to vector
 // @item: element to push
-//
-// Example:
-// ```
-//     int *numbers = NULL; // vector
-//     cook_vec_push(numbers, 2); // numbers[0] = 2
-//     cook_vec_push(numbers, 4); // numbers[1] = 4
-// ```
-//
-// Return: void (updates @vec pointer if reallocation occurs)
-#define cook_vec_push(vec, item)                                        \
-    do {                                                                \
-        if (cook_vec_size(vec) + 1 > cook_vec_capacity(vec)) {          \
-            size_t new_capacity =                                       \
-                cook_vec_capacity(vec) < COOK_VECTOR_INIT_CAPACITY      \
-                ? COOK_VECTOR_INIT_CAPACITY : 2*cook_vec_capacity(vec); \
-            (vec) = cook_vec_resize(vec, new_capacity, sizeof(*(vec))); \
-            COOK_ASSERT((vec) && "out of memory");                      \
-        }                                                               \
-        (vec)[cook_vec_header(vec)->size++] = (item);                   \
+#define cook_vec_push(vec, item)                             \
+    do {                                                     \
+        if ((vec)->len + 1 > (vec)->cap) cook_vec_grow(vec); \
+        (vec)->items[(vec)->len++] = (item);                 \
     } while (0)
 
 // cook_vec_pop - pop an item from vector
-// @vec: pointer to vector data
-//
-// Example:
-// ```
-//     int *numbers = NULL; // vector
-//     cook_vec_push(numbers, 2);     // numbers[0] = 2
-//     int n = cook_vec_pop(numbers); // numbers.size = 0, n = 2
-// ```
+// @vec: pointer to vector
 //
 // Return: the last element in vector
-#define cook_vec_pop(vec) ((vec)[--cook_vec_header(vec)->size])
-
-// cook_vec_empty - check if vector is empty
-// @vec: pointer to vector data
-//
-// Example:
-// ```
-//     int *numbers = NULL; // vector
-//     if (!cook_vec_empty(numbers)) { ... }
-// ```
-//
-// Return: true if vector is empty, false otherwise
-#define cook_vec_empty(vec) (cook_vec_size(vec) == 0)
-
-// cook_vec_full - check if vector is full
-// @vec: pointer to vector data
-//
-// Example:
-// ```
-//     int *numbers = NULL;
-//     if (cook_vec_full(numbers)) { ... }
-// ```
-//
-// Return: true if vector is full, false otherwise
-#define cook_vec_full(vec) (cook_vec_size(vec) == cook_vec_capacity(vec))
+#define cook_vec_pop(vec) ((vec)[--(vec)->len])
 
 // cook_vec_end - get the end pointer of vector
-// @vec: pointer to vector data
+// @vec: pointer to vector
 //
 // Example:
 // ```
-//     int *numbers = NULL;
 //     // iterate through vector
-//     for (int *p = numbers; p < cook_vec_end(numbers); p++) {
+//     for (int *p = numbers.items; p < cook_vec_end(numbers); p++) {
 //         printf("%d ", *p);
 //     }
 // ```
 //
 // Return: pointer past the last element
-#define cook_vec_end(vec) ((vec) ? (vec)+cook_vec_size(vec) : NULL)
-
-// cook_vec_grow - grow the capacity of vector
-// @vec: pointer to vector data
-// @cap: additional capacity to grow
-//
-// Example:
-// ```
-//     int *numbers = NULL;
-//     cook_vec_grow(numbers, 5); // numbers.capacity += 5
-// ```
-//
-// Return: void (updates @vec pointer if reallocation occurs)
-#define cook_vec_grow(vec, cap)                                \
-    do {                                                       \
-        size_t new_cap = cook_vec_capacity(vec) + (cap);       \
-        (vec) = cook_vec_resize((vec), new_cap, sizeof(*vec)); \
-        COOK_ASSERT((vec) && "out of memory");                 \
-    } while (0)
-
-// cook_vec_free - free the memory of vector
-// @vec: pointer to vector data
-//
-// Note: free the memory allocated for vector (including header),
-//       and set pointer to NULL
-//
-// Example:
-// ```
-//     int *numbers = NULL;
-//     // ... use vector ...
-//     cook_vec_free(numbers); // numbers is set to NULL
-// ```
-#define cook_vec_free(vec)                        \
-    do {                                          \
-        if (vec) COOK_FREE(cook_vec_header(vec)); \
-        (vec) = NULL;                             \
-    } while (0)
+#define cook_vec_end(vec) ((vec)->items + (vec)->len)
 
 // cook_vec_reset - reset the size of vector to zero
-// @vec: pointer to vector data
+// @vec: pointer to vector
 //
-// Note: set the size of vector to zero, but keep the capacity and memory
+// Note: set the size of vector to zero, but keep the cap and memory
 //       this does not free memory, just reset size
-//
-// Example:
-// ```
-//     int *numbers = NULL;
-//     cook_vec_push(numbers, 1);
-//     cook_vec_push(numbers, 2);
-//     cook_vec_reset(numbers); // numbers.size = 0
-// ```
-#define cook_vec_reset(vec)                      \
-    do {                                         \
-        if (vec) cook_vec_header(vec)->size = 0; \
-    } while (0)
+#define cook_vec_reset(vec) do { (vec)->len = 0; } while (0)
 
 // cook_vec_foreach - iterate through vector
 // @type: element type of vector
-// @vec: pointer to vector data
+// @vec: pointer to vector
 // @iter: iterator variable name
 //
 // Note: a convenience macro to iterate through vector elements
@@ -298,30 +222,11 @@ typedef struct cook_vector_header {
 //
 // Example:
 // ```
-//     int *numbers = NULL;
-//     ...
 //     cook_vec_foreach(int, numbers, iter) {
 //         printf("%d ", *iter);
 //     }
 // ```
-#define cook_vec_foreach(type, vec, iter) for (type *iter = (vec); iter < cook_vec_end(vec); iter++)
-
-// cook_vec_resize - resize the capacity of vector
-// @vec: pointer to vector data
-// @new_capacity: new capacity to set
-// @item_size: size of each element in bytes
-//
-// Note: resize the vector to new capacity, if new capacity is less than current size,
-//       the vector will be truncated, grow otherwise
-//
-// Example:
-// ```
-//     int *numbers = NULL;
-//     numbers = cook_vec_resize(numbers, 20, sizeof(int)); // numbers.capacity = 20
-// ```
-//
-// Return: new pointer to vector data, or NULL if allocation failed
-COOKDEF void *cook_vec_resize(void *vec, size_t new_capacity, size_t item_size);
+#define cook_vec_foreach(type, vec, iter) for (type *iter = (vec)->items; iter < cook_vec_end(vec); iter++)
 
 
 //////////////////////////////////////////////////////
@@ -391,11 +296,11 @@ COOKDEF void *cook_vec_resize(void *vec, size_t new_capacity, size_t item_size);
 
 typedef struct cook_string_view_t {
     const char *data;
-    size_t length;
+    size_t len;
 } cook_string_view_t;
 
 #define SV_FMT "%.*s"
-#define SV_ARG(sv) (int)(sv).length, (sv).data
+#define SV_ARG(sv) (int)(sv).len, (sv).data
 
 // cook_sv_from_cstr - create string view from C string
 // @cstr: null-terminated C string
@@ -403,9 +308,9 @@ typedef struct cook_string_view_t {
 // Return: string view representing the C string
 COOKDEF cook_string_view_t cook_sv_from_cstr(const char *cstr);
 
-// cook_sv_from_parts - create string view from data pointer and length
+// cook_sv_from_parts - create string view from data pointer and len
 // @data: pointer to string data
-// @length: length of the string data
+// @len: len of the string data
 //
 // Example:
 // ```
@@ -415,7 +320,7 @@ COOKDEF cook_string_view_t cook_sv_from_cstr(const char *cstr);
 // ```
 //
 // Return: string view representing the specified data range
-COOKDEF cook_string_view_t cook_sv_from_parts(const char *data, size_t length);
+COOKDEF cook_string_view_t cook_sv_from_parts(const char *data, size_t len);
 
 // cook_sv_equal - check if two string views are equal
 // @a: first string view
@@ -506,7 +411,9 @@ COOKDEF cook_string_view_t cook_sv_chomp(cook_string_view_t sv);
 // ```
 
 typedef struct cook_string_builder {
-    char *data; // vector of char
+    char *items;
+    size_t len;
+    size_t cap;
 } cook_string_builder_t;
 
 // cook_sb_append_sv - append string view to string builder
@@ -520,13 +427,13 @@ COOKDEF void cook_sb_append_sv(cook_string_builder_t *sb, cook_string_view_t sv)
 // cook_sb_append_parts - append raw data to string builder
 // @sb: string builder pointer
 // @data: pointer to data to append
-// @length: length of data in bytes
-COOKDEF void cook_sb_append_parts(cook_string_builder_t *sb, const char *data, size_t length);
+// @len: len of data in bytes
+COOKDEF void cook_sb_append_parts(cook_string_builder_t *sb, const char *data, size_t len);
 
 // cook_sb_reset - reset string builder to empty state
 // @sb: string builder pointer
 //
-// Note: reset string builder's length to zero, but keep allocated buffer
+// Note: reset string builder's len to zero, but keep allocated buffer
 //       for reuse, memory is not freed
 COOKDEF void cook_sb_reset(cook_string_builder_t *sb);
 
@@ -541,7 +448,7 @@ COOKDEF void cook_sb_free(cook_string_builder_t *sb);
 COOKDEF cook_string_view_t cook_sb_view(const cook_string_builder_t *sb);
 
 // cook_sb_append - append formatted string to string builder
-// @sb_ptr: pointer to string builder
+// @sb: pointer to string builder
 // @fmt: format string
 // @...: arguments for formatting
 //
@@ -554,15 +461,12 @@ COOKDEF cook_string_view_t cook_sb_view(const cook_string_builder_t *sb);
 //     cook_sb_append(&sb, "value: %d", 42);     // sb contains "value: 42"
 //     cook_sb_append(&sb, ", name: %s", "test"); // sb contains "value: 42, name: test"
 // ```
-#define cook_sb_append(sb_ptr, fmt, ...)                         \
+#define cook_sb_append(sb, fmt, ...)                             \
     do {                                                         \
         size_t checkpoint = cook_temp_save();                    \
         const char *cstr = cook_temp_strfmt(fmt, ##__VA_ARGS__); \
-        size_t length = strlen(cstr);                            \
-        size_t size = COOK_ALIGN_UP(length, sizeof(void*));      \
-        cook_vec_grow((sb_ptr)->data, size);                     \
-        memcpy(cook_vec_end((sb_ptr)->data), cstr, length);      \
-        cook_vec_header((sb_ptr)->data)->size += length;         \
+        size_t len = strlen(cstr);                               \
+        cook_sb_append_parts(sb, cstr, len);                     \
         cook_temp_rewind(checkpoint);                            \
     } while (0)
 
@@ -605,7 +509,7 @@ COOKDEF void *cook_temp_alloc(size_t size);
 // Return: pointer to duplicated string in temporary memory
 COOKDEF const char *cook_temp_strdup(const char *cstr);
 
-// cook_temp_strndup - duplicate limited length of C string to temporary memory
+// cook_temp_strndup - duplicate limited len of C string to temporary memory
 // @cstr: null-terminated C string to duplicate
 // @n: maximum number of characters to copy
 //
@@ -737,32 +641,22 @@ COOKDEF const char *cook_temp_path_basename(const char *path);
 
 #ifdef COOK_IMPLEMENTATION
 
-COOKDEF void *cook_vec_resize(void *vec, size_t new_capacity, size_t item_size) {
-    size_t alloc_size = sizeof(cook_vechdr_t) + new_capacity*item_size;
-    size_t vec_size = cook_vec_size(vec);
-    cook_vechdr_t *new_header = COOK_REALLOC(cook_vec_header(vec), alloc_size);
-    if (!new_header) return NULL;
-    new_header->size = vec_size < new_capacity ? vec_size : new_capacity;
-    new_header->capacity = new_capacity;
-    return (void*)((char*)new_header + sizeof(cook_vechdr_t));
-}
-
 COOKDEF cook_string_view_t cook_sv_from_cstr(const char *cstr) {
     return (cook_string_view_t) {
         .data = cstr,
-        .length = cstr ? strlen(cstr) : 0
+        .len = cstr ? strlen(cstr) : 0
     };
 }
 
-COOKDEF cook_string_view_t cook_sv_from_parts(const char *data, size_t length) {
+COOKDEF cook_string_view_t cook_sv_from_parts(const char *data, size_t len) {
     return (cook_string_view_t) {
         .data = data,
-        .length = length
+        .len = len
     };
 }
 
 COOKDEF bool cook_sv_equal(cook_string_view_t a, cook_string_view_t b) {
-    if (a.length == b.length && memcmp(a.data, b.data, a.length) == 0) {
+    if (a.len == b.len && memcmp(a.data, b.data, a.len) == 0) {
         return true;
     } else {
         return false;
@@ -770,35 +664,35 @@ COOKDEF bool cook_sv_equal(cook_string_view_t a, cook_string_view_t b) {
 }
 
 COOKDEF bool cook_sv_starts_with(cook_string_view_t sv, cook_string_view_t prefix) {
-    if (prefix.length > sv.length) return false;
-    return memcmp(sv.data, prefix.data, prefix.length) == 0;
+    if (prefix.len > sv.len) return false;
+    return memcmp(sv.data, prefix.data, prefix.len) == 0;
 }
 
 COOKDEF bool cook_sv_ends_with(cook_string_view_t sv, cook_string_view_t postfix) {
-    if (postfix.length > sv.length) return false;
-    size_t offset = sv.length - postfix.length;
-    return memcmp(sv.data + offset, postfix.data, postfix.length) == 0;
+    if (postfix.len > sv.len) return false;
+    size_t offset = sv.len - postfix.len;
+    return memcmp(sv.data + offset, postfix.data, postfix.len) == 0;
 }
 
 COOKDEF bool cook_sv_empty(cook_string_view_t sv) {
-    return sv.data == NULL || sv.length == 0;
+    return sv.data == NULL || sv.len == 0;
 }
 
 COOKDEF cook_string_view_t cook_sv_slice(cook_string_view_t sv, size_t begin, size_t end) {
     cook_string_view_t res = {0};
 
-    if (begin >= end || end - begin > sv.length) return res;
+    if (begin >= end || end - begin > sv.len) return res;
     res.data = sv.data + begin;
-    res.length = end - begin;
+    res.len = end - begin;
     return res;
 }
 
 COOKDEF cook_string_view_t cook_sv_ltrim(cook_string_view_t sv) {
     cook_string_view_t res = {0};
-    for (size_t i = 0; i < sv.length; i++) {
+    for (size_t i = 0; i < sv.len; i++) {
         if (sv.data[i] == ' ' || sv.data[i] == '\t') continue;
         res.data = sv.data + i;
-        res.length = sv.length - i;
+        res.len = sv.len - i;
         break;
     }
     return res;
@@ -806,10 +700,10 @@ COOKDEF cook_string_view_t cook_sv_ltrim(cook_string_view_t sv) {
 
 COOKDEF cook_string_view_t cook_sv_rtrim(cook_string_view_t sv) {
     cook_string_view_t res = {0};
-    for (size_t i = sv.length; i > 0; i--) {
+    for (size_t i = sv.len; i > 0; i--) {
         if (sv.data[i-1] == ' ' || sv.data[i-1] == '\t') continue;
         res.data = sv.data;
-        res.length = i;
+        res.len = i;
         break;
     }
     return res;
@@ -824,51 +718,47 @@ COOKDEF cook_string_view_t cook_sv_trim(cook_string_view_t sv) {
 
 COOKDEF cook_string_view_t cook_sv_chomp(cook_string_view_t sv) {
     cook_string_view_t res = {0};
-    for (size_t i = sv.length; i > 0; i--) {
+    for (size_t i = sv.len; i > 0; i--) {
         if (sv.data[i-1] == '\n' || sv.data[i-1] == '\r') continue;
         res.data = sv.data;
-        res.length = i;
+        res.len = i;
         break;
     }
     return res;
 }
 
 COOKDEF void cook_sb_append_sv(cook_string_builder_t *sb, cook_string_view_t sv) {
-    size_t size = COOK_ALIGN_UP(sv.length, sizeof(void*));
-    cook_vec_grow(sb->data, size);
-    memcpy(cook_vec_end(sb->data), sv.data, sv.length);
-    cook_vec_header(sb->data)->size += sv.length;
+    cook_sb_append_parts(sb, sv.data, sv.len);
 }
 
-COOKDEF void cook_sb_append_parts(cook_string_builder_t *sb, const char *data, size_t length) {
-    size_t size = COOK_ALIGN_UP(length, sizeof(void*));
-    cook_vec_grow(sb->data, size);
-    memcpy(cook_vec_end(sb->data), data, length);
-    cook_vec_header(sb->data)->size += length;
+COOKDEF void cook_sb_append_parts(cook_string_builder_t *sb, const char *data, size_t len) {
+    if (sb->len + 1 > sb->cap) cook_vec_grow(sb);
+    memcpy(cook_vec_end(sb), data, len);
+    sb->len += len;
 }
 
 COOKDEF void cook_sb_reset(cook_string_builder_t *sb) {
-    cook_vec_reset(sb->data);
+    cook_vec_reset(sb);
 }
 
 COOKDEF void cook_sb_free(cook_string_builder_t *sb) {
-    cook_vec_free(sb->data);
+    cook_vec_free(sb);
 }
 
 COOKDEF cook_string_view_t cook_sb_view(const cook_string_builder_t *sb) {
     return (cook_string_view_t) {
-        .data = sb->data,
-        .length = cook_vec_size(sb->data)
+        .data = sb->items,
+        .len = sb->len
     };
 }
 
-static unsigned char _temp_buffer[COOK_TEMP_BUFFER_CAPACITY] = {0};
+static unsigned char _temp_buffer[COOK_TEMP_BUFFER_CAP] = {0};
 static size_t _temp_buffer_used = 0;
 
 COOKDEF void *cook_temp_alloc(size_t size) {
     if (size == 0) return NULL;
     size_t aligned_used = COOK_ALIGN_UP(_temp_buffer_used, sizeof(void*));
-    if (aligned_used + size > COOK_TEMP_BUFFER_CAPACITY) return NULL;
+    if (aligned_used + size > COOK_TEMP_BUFFER_CAP) return NULL;
     void *ptr = _temp_buffer + aligned_used;
     _temp_buffer_used = aligned_used + size;
     return ptr;
@@ -897,14 +787,14 @@ COOKDEF const char *cook_temp_strndup(const char *cstr, size_t n) {
 COOKDEF const char *cook_temp_strsub(const char *cstr, size_t begin, size_t end) {
     if (!cstr || begin >= end) return NULL;
 
-    size_t sub_length = end - begin;
-    char *ptr = cook_temp_alloc(sub_length + 1);
+    size_t sub_len = end - begin;
+    char *ptr = cook_temp_alloc(sub_len + 1);
     COOK_ASSERT(ptr != NULL && "out of temporary buffer");
 
-    for (size_t i = 0; i < sub_length ; i++) {
+    for (size_t i = 0; i < sub_len ; i++) {
         ptr[i] = cstr[begin + i];
     }
-    ptr[sub_length] = '\0';
+    ptr[sub_len] = '\0';
 
     return ptr;
 }
@@ -930,10 +820,10 @@ COOKDEF const char *cook_temp_strfmt(const char *fmt, ...) {
 }
 
 COOKDEF const char *cook_temp_sv_to_cstr(cook_string_view_t sv) {
-    char *ptr = cook_temp_alloc(sv.length + 1);
+    char *ptr = cook_temp_alloc(sv.len + 1);
     COOK_ASSERT(ptr != NULL && "out of temporary buffer");
-    memcpy(ptr, sv.data, sv.length);
-    ptr[sv.length] = '\0';
+    memcpy(ptr, sv.data, sv.len);
+    ptr[sv.len] = '\0';
     return ptr;
 }
 
@@ -1016,22 +906,18 @@ COOKDEF const char *cook_temp_path_basename(const char *path) {
 
 #ifdef COOK_STRIP_PREFIX
 
-#define vec_header   cook_vec_header
-#define vec_size     cook_vec_size
-#define vec_capacity cook_vec_capacity
 #define vec_push     cook_vec_push
 #define vec_pop      cook_vec_pop
 #define vec_foreach  cook_vec_foreach
-#define vec_resize   cook_vec_resize
 #define vec_grow     cook_vec_grow
-#define vec_empty    cook_vec_empty
-#define vec_full     cook_vec_full
 #define vec_end      cook_vec_end
 #define vec_free     cook_vec_free
 #define vec_reset    cook_vec_reset
+#define vec_reverse  cook_vec_reverse
 
-#define arr_size    cook_arr_size
+#define arr_len     cook_arr_len
 #define arr_foreach cook_arr_foreach
+#define arr_reverse cook_arr_reverse
 
 #define ALIGN_UP     COOK_ALIGN_UP
 #define ALIGN_DOWN   COOK_ALIGN_DOWN
