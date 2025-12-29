@@ -1,5 +1,5 @@
 /*
-cook.h - v0.07 - Dylaris 2025
+cook.h - v0.08 - Dylaris 2025
 ===================================================
 
 BRIEF:
@@ -18,6 +18,7 @@ USAGE:
   In other files, just include the header without the macro.
 
 HISTORY:
+    v0.08 Support 'mini cmd' and 'mini test'
     v0.07 Remove 'mini hash table'
     v0.06 Support 'temp allocator', 'string view', 'string builder'
     v0.05 Remove 'list', 'deque', 'string', 'file'
@@ -294,7 +295,7 @@ LICENSE:
 /////////////////////// string view
 //////////////////////////////////////////////////////
 
-typedef struct cook_string_view_t {
+typedef struct cook_string_view {
     const char *data;
     size_t len;
 } cook_string_view_t;
@@ -428,7 +429,7 @@ COOKDEF void cook_sb_append_sv(cook_string_builder_t *sb, cook_string_view_t sv)
 // @sb: string builder pointer
 // @data: pointer to data to append
 // @len: len of data in bytes
-COOKDEF void cook_sb_append_parts(cook_string_builder_t *sb, const char *data, size_t len);
+COOKDEF void cook_sb_append_parts(cook_string_builder_t *sb, const void *data, size_t len);
 
 // cook_sb_reset - reset string builder to empty state
 // @sb: string builder pointer
@@ -466,7 +467,7 @@ COOKDEF cook_string_view_t cook_sb_view(const cook_string_builder_t *sb);
         size_t checkpoint = cook_temp_save();                    \
         const char *cstr = cook_temp_strfmt(fmt, ##__VA_ARGS__); \
         size_t len = strlen(cstr);                               \
-        cook_sb_append_parts(sb, cstr, len);                     \
+        cook_sb_append_parts(sb, (const void *) cstr, len);      \
         cook_temp_rewind(checkpoint);                            \
     } while (0)
 
@@ -491,6 +492,101 @@ struct cook_writer {
     void (*close)(cook_writer_t *w);
     const char *(*error)(cook_writer_t *w);
 };
+
+
+//////////////////////////////////////////////////////
+/////////////////////// mini cmd
+//////////////////////////////////////////////////////
+
+typedef cook_string_builder_t cook_cmd_t;
+
+// cook_cmd_append - append a formated string to cmd
+// @cmd: pointer to cmd
+// @fmt: string format
+// @...: variable parameters
+#define cook_cmd_append(cmd, fmt, ...)           \
+    do {                                         \
+        cook_sb_append(cmd, " ");                \
+        cook_sb_append(cmd, fmt, ##__VA_ARGS__); \
+    } while (0)
+
+// cook_cmd_append_many - append many string to cmd
+// @cmd: pointer to cmd
+// @...: variable parameters
+#define cook_cmd_append_many(cmd, ...)                     \
+    do {                                                   \
+        const char *parts[] = {__VA_ARGS__};               \
+        for (size_t i = 0; i < cook_arr_len(parts); i++) { \
+            cook_sb_append(cmd, " ");                      \
+            cook_sb_append(cmd, parts[i]);                 \
+        }                                                  \
+    } while (0)
+
+// cook_cmd_free - free all memory cmd takes
+// @cmd: pointer to cmd
+COOKDEF void cook_cmd_free(cook_cmd_t *cmd);
+
+// cook_cmd_reset - reset cmd, keep the memory
+// @cmd: pointer to cmd
+COOKDEF void cook_cmd_reset(cook_cmd_t *cmd);
+
+// cook_cmd_print - print cmd with prefix
+// @cmd: pointer to cmd
+// @prefix: prefix string
+COOKDEF void cook_cmd_print(cook_cmd_t *cmd, const char *prefix);
+
+// cook_cmd_run - run cmd using 'system()'
+// @cmd: pointer to cmd
+COOKDEF bool cook_cmd_run(cook_cmd_t *cmd);
+
+
+//////////////////////////////////////////////////////
+/////////////////////// mini test
+//////////////////////////////////////////////////////
+
+typedef struct {
+    const char *expr;
+    const char *info;
+    const char *file;
+    size_t line;
+    size_t id;
+    bool ok;
+} cook_mucase_t;
+
+typedef struct {
+    const char *name;
+    cook_mucase_t *items;
+    size_t len;
+    size_t cap;
+    size_t passed;
+    size_t failed;
+} cook_musuite_t;
+
+#define COOK_MUTEST(expr_, info_)               \
+    do {                                        \
+        cook_mucase_t test_case = {             \
+            .expr = # expr_,                    \
+            .info = info_,                      \
+            .file = __FILE__,                   \
+            .line = __LINE__,                   \
+            .id = _test_suite.len + 1,          \
+            .ok = (expr_)                       \
+        };                                      \
+        cook_vec_push(&_test_suite, test_case); \
+        if (test_case.ok) _test_suite.passed++; \
+        else _test_suite.failed++;              \
+    } while (0)
+
+// cook_mutest_detail - print details (all test cases)
+COOKDEF void cook_mutest_detail(void);
+
+// cook_mutest_summary - print summary (only summary)
+COOKDEF void cook_mutest_summary(void);
+
+// helper function for testing
+COOKDEF bool cook_expect_mem_eq(size_t n, void *p1, void *p2);
+COOKDEF bool cook_expect_str_eq(const char *s1, const char *s2);
+
 
 //////////////////////////////////////////////////////
 /////////////////////// temporary allocator
@@ -731,7 +827,7 @@ COOKDEF void cook_sb_append_sv(cook_string_builder_t *sb, cook_string_view_t sv)
     cook_sb_append_parts(sb, sv.data, sv.len);
 }
 
-COOKDEF void cook_sb_append_parts(cook_string_builder_t *sb, const char *data, size_t len) {
+COOKDEF void cook_sb_append_parts(cook_string_builder_t *sb, const void *data, size_t len) {
     if (sb->len + 1 > sb->cap) cook_vec_grow(sb);
     memcpy(cook_vec_end(sb), data, len);
     sb->len += len;
@@ -902,9 +998,82 @@ COOKDEF const char *cook_temp_path_basename(const char *path) {
     return cook_temp_strdup(last_sep + 1);
 }
 
+COOKDEF void cook_cmd_free(cook_cmd_t *cmd) {
+    cook_sb_free(cmd);
+}
+
+COOKDEF void cook_cmd_reset(cook_cmd_t *cmd) {
+    cook_sb_reset(cmd);
+}
+
+COOKDEF void cook_cmd_print(cook_cmd_t *cmd, const char *prefix) {
+    cook_string_view_t sv = cook_sb_view(cmd);
+    printf("%s"SV_FMT"\n", prefix, SV_ARG(sv));
+    fflush(stdout);
+}
+
+COOKDEF bool cook_cmd_run(cook_cmd_t *cmd) {
+    if (cmd->cap == cmd->len) {
+        cook_sb_append(cmd, "");
+    } else {
+        cmd->items[cmd->len] = '\0';
+    }
+    cook_cmd_print(cmd, "[INFO]");
+    int status = system(cmd->items);
+    if (status != 0) cook_cmd_print(cmd, "[ERROR]");
+    return status == 0;
+}
+
+static cook_musuite_t _test_suite = {
+    .name = "default",
+    .items = NULL,
+    .len = 0,
+    .cap = 0
+};
+
+// cook__mutest_print_case - print one test case
+// @test_case: pointer to tset case
+static void cook__mutest_print_case(cook_mucase_t *test_case) {
+    printf("[%02ld] [%s] [%s:%ld] >>> %s <<< --- %s\n",
+           test_case->id, test_case->ok ? "pass" : "fail",
+           test_case->file, test_case->line, test_case->expr, test_case->info);
+}
+
+COOKDEF void cook_mutest_detail(void) {
+    for (size_t i = 0; i < _test_suite.len; i++) {
+        cook__mutest_print_case(&_test_suite.items[i]);
+    }
+}
+
+COOKDEF void cook_mutest_summary(void) {
+    printf("-------------------------------------------------\n");
+    printf("Summary:\n");
+    printf("    passed: %ld\n", _test_suite.passed);
+    printf("    failed: %ld\n", _test_suite.failed);
+    printf("    total:  %ld\n", _test_suite.len);
+    printf("-------------------------------------------------\n");
+    cook_vec_free(&_test_suite);
+}
+
+COOKDEF bool cook_expect_mem_eq(size_t n, void *p1, void *p2) {
+    return memcmp(p1, p2, n) == 0;
+}
+
+COOKDEF bool cook_expect_str_eq(const char *s1, const char *s2) {
+    if (!s1 && !s2) return true;  // s1 = NULL, s2 = NULL
+    if (!s1 || !s2) return false; // s1 = NULL, s2 != NULL
+    return strcmp(s1, s2) == 0;
+}
+
 #endif // COOK_IMPLEMENTATION
 
 #ifdef COOK_STRIP_PREFIX
+
+typedef cook_string_view_t string_view_t;
+typedef cook_string_builder_t string_builder_t;
+typedef cook_cmd_t cmd_t;
+typedef cook_mucase_t mucase_t;
+typedef cook_musuite_t musuite_t;
 
 #define vec_push     cook_vec_push
 #define vec_pop      cook_vec_pop
@@ -955,6 +1124,19 @@ COOKDEF const char *cook_temp_path_basename(const char *path) {
 #define sb_free         cook_sb_free
 #define sb_view         cook_sb_view
 #define sb_append       cook_sb_append
+
+#define cmd_append      cook_cmd_append
+#define cmd_append_many cook_cmd_append_many
+#define cmd_reset       cook_cmd_reset
+#define cmd_free        cook_cmd_free
+#define cmd_run         cook_cmd_run
+#define cmd_print       cook_cmd_print
+
+#define MUTEST COOK_MUTEST
+#define mutest_detail  cook_mutest_detail
+#define mutest_summary cook_mutest_summary
+#define expect_mem_eq  cook_expect_mem_eq
+#define expect_str_eq  cook_expect_str_eq
 
 #endif // COOK_STRIP_PREFIX
 

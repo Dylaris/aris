@@ -10,6 +10,8 @@ static const char *example_src[] = {
     EXAMPLE_FOLDER"temp_allocator.c",
     EXAMPLE_FOLDER"string_view.c",
     EXAMPLE_FOLDER"string_builder.c",
+    EXAMPLE_FOLDER"cmd.c",
+    EXAMPLE_FOLDER"mutest.c",
 };
 
 static const char *example_exe[] = {
@@ -17,6 +19,8 @@ static const char *example_exe[] = {
     EXAMPLE_FOLDER"temp_allocator",
     EXAMPLE_FOLDER"string_view",
     EXAMPLE_FOLDER"string_builder",
+    EXAMPLE_FOLDER"cmd",
+    EXAMPLE_FOLDER"mutest",
 };
 
 bool clean(void)
