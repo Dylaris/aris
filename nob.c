@@ -12,6 +12,7 @@ static const char *example_src[] = {
     EXAMPLE_FOLDER"string_builder.c",
     EXAMPLE_FOLDER"cmd.c",
     EXAMPLE_FOLDER"mutest.c",
+    EXAMPLE_FOLDER"fs.c",
 };
 
 static const char *example_exe[] = {
@@ -21,6 +22,7 @@ static const char *example_exe[] = {
     EXAMPLE_FOLDER"string_builder",
     EXAMPLE_FOLDER"cmd",
     EXAMPLE_FOLDER"mutest",
+    EXAMPLE_FOLDER"fs",
 };
 
 bool clean(void)
@@ -29,6 +31,10 @@ bool clean(void)
         if (!nob_delete_file(example_exe[i])) return false;
     }
 }
+
+struct tag {
+    struct tag *a;
+};
 
 int main(int argc, char **argv)
 {

@@ -1,5 +1,5 @@
 /*
-cook.h - v0.08 - Dylaris 2025
+cook.h - v0.9.0 - Dylaris 2025
 ===================================================
 
 BRIEF:
@@ -18,13 +18,15 @@ USAGE:
   In other files, just include the header without the macro.
 
 HISTORY:
-    v0.08 Support 'mini cmd' and 'mini test'
-    v0.07 Remove 'mini hash table'
-    v0.06 Support 'temp allocator', 'string view', 'string builder'
-    v0.05 Remove 'list', 'deque', 'string', 'file'
-    v0.04 Support data-structure 'mini hash table'
-    v0.03 Support data-structure 'doubly instrusive linked list'
-    v0.02 Support data-structure 'deque'
+    v0.9.0 (2026-1-3 by @dylaris): Support some file system functions
+       (steal from https://github.com/lunarmodules/luafilesystem.git)
+    v0.8.0 Support 'mini cmd' and 'mini test'
+    v0.7.0 Remove 'mini hash table'
+    v0.6.0 Support 'temp allocator', 'string view', 'string builder'
+    v0.5.0 Remove 'list', 'deque', 'string', 'file'
+    v0.4.0 Support data-structure 'mini hash table'
+    v0.3.0 Support data-structure 'doubly instrusive linked list'
+    v0.2.0 Support data-structure 'deque'
 
 LICENSE:
   See the end of this file for further details.
@@ -33,10 +35,7 @@ LICENSE:
 #ifndef COOK_H
 #define COOK_H
 
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <stdarg.h>
+#include <stddef.h>
 #include <stdbool.h>
 
 #ifndef COOKDEF
@@ -58,6 +57,10 @@ LICENSE:
 #ifndef COOK_ASSERT
 #include <assert.h>
 #define COOK_ASSERT(x) assert(x)
+#endif
+
+#ifndef COOK_MAX_PATH_LEN
+#define COOK_MAX_PATH_LEN 260
 #endif
 
 #ifndef COOK_INIT_CAP
@@ -733,9 +736,392 @@ COOKDEF const char *cook_temp_path_dirname(const char *path);
 // Return: base filename in temporary memory, or empty string if no filename
 COOKDEF const char *cook_temp_path_basename(const char *path);
 
+
+//////////////////////////////////////////////////////
+/////////////////////// file system
+/////////////////////// (steal from https://github.com/lunarmodules/luafilesystem.git)
+//////////////////////////////////////////////////////
+
+typedef struct cook_dir_t cook_dir_t;
+typedef struct {
+    unsigned int mode;
+    long long ino;
+    long long size;
+    long long atime;
+    long long mtime;
+    long long ctime;
+} cook_attr_t;
+
+// cook_fs_readfile - read the entire file
+// @path: file path
+// Return: buffer in heap, filled with file content
+COOKDEF char *cook_fs_readfile(const char *path);
+
+// cook_fs_cwd - get the current work directory
+// Return: string in heap, contains the absolute path
+COOKDEF char *cook_fs_cwd(void);
+
+// cook_fs_mkdir - create a directory
+// @path: directory path
+// Note: it will fail if the directory has been existed
+// Return: true if successfully created, false otherwise
+COOKDEF bool cook_fs_mkdir(const char *path);
+
+// cook_fs_rmdir - remove a empty directory
+// @path: directory path
+// Note: it will fail if the directory does not exist or has other files
+// Return: true if successfully removed, false otherwise
+COOKDEF bool cook_fs_rmdir(const char *path);
+
+// cook_fs_chdir - change work directory
+// @path: destinated directory path
+// Return: true if successfully changed, false otherwise
+COOKDEF bool cook_fs_chdir(const char *path);
+
+// cook_fs_opendir - open a directory
+// @path: directory path
+// Return: a pointer to directory handle, or NULL on error
+COOKDEF cook_dir_t *cook_fs_opendir(const char *path);
+
+// cook_fs_closedir - close a directory
+// @handle: a pointer to cook_dir_t
+COOKDEF void cook_fs_closedir(cook_dir_t *handle);
+
+// cook_fs_readdir - read a item from directory
+// @handle: a pointer to cook_dir_t
+// Return: a string in local buffer, contains the relatively file path
+COOKDEF const char *cook_fs_readdir(cook_dir_t *handle);
+
+// cook_fs_move - move the file to anoter place (rename)
+// @old_path: source
+// @new_path: destination
+// Return: true if successfully move, false otherwise
+COOKDEF bool cook_fs_move(const char *old_path, const char *new_path);
+
+// cook_fs_stat - get the attribute of file
+// @path: file path
+// @attr_ptr: pointer to cook_attr_t, stores the result
+// Return: true if successfully get, false otherwise
+COOKDEF bool cook_fs_stat(const char *path, cook_attr_t *attr_ptr);
+
+// cook_fs_isdir - check if the path is directory
+// @path: file path
+// Note: call cook_fs_stat internal, use COOK_ASSERT to check if cook_fs_stat is fine,
+//       not mixed the result of cook_fs_stat with cook_fs_isdir (both are boolean)
+// Return: true if the path is directory, false otherwise
+COOKDEF bool cook_fs_isdir(const char *path);
+
+// cook_fs_isfile - check if the path is regular file
+// @path: file path
+// Note: same to cook_fs_isdir
+// Return: true if the path is file, false otherwise
+COOKDEF bool cook_fs_isfile(const char *path);
+
+// cook_fs_exists - check if the path exists
+// @path: file path
+// Return: true if the path exists, false otherwise
+COOKDEF bool cook_fs_exists(const char *path);
+
+// get the string in static buffer, which contains the information
+COOKDEF const char *cook_fs_type2string(cook_attr_t *attr_ptr);
+COOKDEF const char *cook_fs_perm2string(cook_attr_t *attr_ptr);
+
 #endif // COOK_H
 
 #ifdef COOK_IMPLEMENTATION
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <stdarg.h>
+
+#include <errno.h>
+#include <time.h>
+#include <sys/stat.h>
+
+#ifdef _WIN32
+#  include <direct.h>
+#  include <windows.h>
+#  include <io.h>
+#  include <sys/locking.h>
+#  include <sys/utime.h>
+#  include <fcntl.h>
+#else
+#  include <unistd.h>
+#  include <dirent.h>
+#  include <fcntl.h>
+#  include <sys/types.h>
+#  include <utime.h>
+#endif
+
+#ifdef _WIN32
+#  define chdir(p) (_chdir(p))
+#  define getcwd(d, s) (_getcwd(d, s))
+#  define rmdir(p) (_rmdir(p))
+#  ifndef fileno
+#    define fileno(f) (_fileno(f))
+#  endif
+#endif
+
+#ifdef _WIN32
+#  ifndef S_ISDIR
+#    define S_ISDIR(mode) (mode&_S_IFDIR)
+#  endif
+#  ifndef S_ISREG
+#    define S_ISREG(mode) (mode&_S_IFREG)
+#  endif
+#  define STAT_STRUCT struct _stati64
+#  define STAT_FUNC _stati64
+#else
+#  define STAT_STRUCT struct stat
+#  define STAT_FUNC stat
+#endif
+
+struct cook_dir_t {
+    bool closed;
+#ifdef _WIN32
+    intptr_t hFile;
+    char pattern[COOK_MAX_PATH_LEN + 1];
+#else
+    DIR *dp;
+#endif
+    char buffer[COOK_MAX_PATH_LEN + 1];
+};
+
+COOKDEF char *cook_fs_readfile(const char *path) {
+    FILE *fp = NULL;
+    char *buffer = NULL;
+    long size;
+
+    fp = fopen(path, "rb");
+    if (!fp) goto fail;
+
+    fseek(fp, 0, SEEK_END);
+    size = ftell(fp);
+    rewind(fp);
+    if (size <= 0) goto fail;
+
+    buffer = malloc(size + 1);
+    if (fread(buffer, size, 1, fp) != 1) goto fail;
+    buffer[size] = '\0';
+
+    fclose(fp);
+    return buffer;
+fail:
+    if (!fp) fclose(fp);
+    if (!buffer) free(buffer);
+    return NULL;
+}
+
+COOKDEF char *cook_fs_cwd(void) {
+    char *path = NULL;
+    size_t size = 128;
+
+    while (1) {
+        char *temp_path = realloc(path, size);
+        path = temp_path;
+        if (getcwd(temp_path, size)) break;
+        if (errno != ERANGE) {
+            free(temp_path);
+            fprintf(stderr, "ERROR: cook_fs_cwd: %s\n", strerror(errno));
+            return NULL;
+        }
+        size *= 2;
+    }
+
+    return path;
+}
+
+COOKDEF bool cook_fs_mkdir(const char *path) {
+#ifdef _WIN32
+#  define cook__fs_mkdir _mkdir
+#else
+#  define cook__fs_mkdir(path) (mkdir((path), \
+    S_IRUSR | S_IWUSR | S_IXUSR | S_IRGRP | S_IWGRP | S_IXGRP | S_IROTH | S_IXOTH))
+#endif
+    if (cook__fs_mkdir(path) != 0) {
+        fprintf(stderr, "ERROR: cook_fs_mkdir: %s\n", strerror(errno));
+        return false;
+    }
+    return true;
+}
+
+COOKDEF bool cook_fs_rmdir(const char *path) {
+    if (rmdir(path) != 0) {
+        fprintf(stderr, "ERROR: cook_fs_rmdir: %s\n", strerror(errno));
+        return false;
+    }
+    return true;
+}
+
+COOKDEF bool cook_fs_chdir(const char *path) {
+    if (chdir(path) != 0) {
+        fprintf(stderr, "ERROR: cook_fs_chdir: %s\n", strerror(errno));
+        return false;
+    }
+    return true;
+}
+
+COOKDEF cook_dir_t *cook_fs_opendir(const char *path) {
+    cook_dir_t *handle = NULL;
+
+    handle = malloc(sizeof(cook_dir_t));
+    if (!handle) COOK_ASSERT(handle != NULL && "out of memory");
+
+#ifdef _WIN32
+    handle->hFile = 0L;
+    if (strlen(path) > COOK_MAX_PATH_LEN - 2) {
+        fprintf(stderr, "ERROR: cook_fs_opendir: path too long: %s\n", path);
+        goto fail;
+    } else {
+        snprintf(handle->pattern, sizeof(handle->pattern), "%s/*", path);
+    }
+#else
+    handle->dp = opendir(path);
+    if (!handle->dp) {
+        fprintf(stderr, "ERROR: cook_fs_opendir: %s\n", strerror(errno));
+        goto fail;
+    }
+#endif
+    handle->closed = false;
+
+    return handle;
+fail:
+    if (!handle) free(handle);
+    return NULL;
+}
+
+COOKDEF void cook_fs_closedir(cook_dir_t *handle) {
+#ifdef _WIN32
+    if (!handle->closed && handle->hFile) _findclose(handle->hFile);
+#else
+    if (!handle->closed && handle->dp) closedir(handle->dp);
+#endif
+    free(handle);
+}
+
+COOKDEF const char *cook_fs_readdir(cook_dir_t *handle) {
+#ifdef _WIN32
+    struct _finddata_t c_file;
+    if (handle->hFile == 0L) { /* first entry */
+        if ((handle->hFile = _findfirst(handle->pattern, &c_file)) == -1L) {
+            fprintf(stderr, "ERROR: cook_fs_readdir: %s\n", strerror(errno));
+            handle->closed = true;
+            return NULL;
+        } else {
+            if (strlen(c_file.name) > COOK_MAX_PATH_LEN) {
+                fprintf(stderr, "ERROR: cook_fs_readdir: path too long: %s\n", c_file.name);
+                return NULL;
+            }
+            snprintf(handle->buffer, sizeof(handle->buffer), "%s", c_file.name);
+            return handle->buffer;
+        }
+    } else { /* next entry */
+        if (_findnext(handle->hFile, &c_file) == -1L) {
+            /* no more entries => close directory */
+            _findclose(handle->hFile);
+            handle->closed = true;
+            return NULL;
+        } else {
+            if (strlen(c_file.name) > COOK_MAX_PATH_LEN) {
+                fprintf(stderr, "ERROR: cook_fs_readdir: path too long: %s\n", c_file.name);
+                return NULL;
+            }
+            snprintf(handle->buffer, sizeof(handle->buffer), "%s", c_file.name);
+            return handle->buffer;
+        }
+    }
+#else
+    struct dirent *entry;
+    if ((entry = readdir(handle->dp)) != NULL) {
+        if (strlen(entry->d_name) > COOK_MAX_PATH_LEN) {
+            fprintf(stderr, "ERROR: cook_fs_readdir: path too long: %s\n", entry->d_name);
+            return NULL;
+        }
+        snprintf(handle->buffer, sizeof(handle->buffer), "%s", entry->d_name);
+        return handle->buffer;
+    } else {
+        /* no more entries => close directory */
+        closedir(handle->dp);
+        handle->closed = true;
+        return NULL;
+    }
+#endif
+}
+
+COOKDEF bool cook_fs_move(const char *old_path, const char *new_path) {
+    if (rename(old_path, new_path) != 0) {
+        fprintf(stderr, "ERROR: cook_fs_move: %s\n", strerror(errno));
+        return false;
+    }
+    return true;
+}
+
+COOKDEF bool cook_fs_stat(const char *path, cook_attr_t *attr_ptr) {
+    STAT_STRUCT info = {0};
+    if (STAT_FUNC(path, &info)) {
+        fprintf(stderr, "ERROR: cook_fs_stat: %s\n", strerror(errno));
+        return false;
+    }
+    attr_ptr->mode  = info.st_mode;
+    attr_ptr->ino   = info.st_ino;
+    attr_ptr->atime = info.st_atime;
+    attr_ptr->mtime = info.st_mtime;
+    attr_ptr->ctime = info.st_ctime;
+    attr_ptr->size  = info.st_size;
+    return true;
+}
+
+COOKDEF bool cook_fs_isdir(const char *path) {
+    cook_attr_t attr;
+    COOK_ASSERT(cook_fs_stat(path, &attr) && "unexpected error occurs");
+    return S_ISDIR(attr.mode);
+}
+
+COOKDEF bool cook_fs_isfile(const char *path) {
+    cook_attr_t attr;
+    COOK_ASSERT(cook_fs_stat(path, &attr) && "unexpected error occurs");
+    return S_ISREG(attr.mode);
+}
+
+COOKDEF bool cook_fs_exists(const char *path) {
+    cook_attr_t attr;
+    if (!cook_fs_stat(path, &attr)) return false;
+    return true;
+}
+
+COOKDEF const char *cook_fs_type2string(cook_attr_t *attr_ptr) {
+    int mode = attr_ptr->mode;
+    if (S_ISREG(mode)) {
+        return "file";
+    } else if (S_ISDIR(mode)) {
+        return "dir";
+    } else {
+        return "other";
+    }
+}
+
+COOKDEF const char *cook_fs_perm2string(cook_attr_t *attr_ptr) {
+    static char perms[10] = "---------";
+    for (int i = 0; i < 9; i++) perms[i] = '-';
+    int mode = attr_ptr->mode;
+#ifdef _WIN32
+    if (mode & _S_IREAD)  perms[0] = perms[3] = perms[6] = 'r';
+    if (mode & _S_IWRITE) perms[1] = perms[4] = perms[7] = 'w';
+    if (mode & _S_IEXEC)  perms[2] = perms[5] = perms[8] = 'x';
+#else
+    if (mode & S_IRUSR) perms[0] = 'r';
+    if (mode & S_IWUSR) perms[1] = 'w';
+    if (mode & S_IXUSR) perms[2] = 'x';
+    if (mode & S_IRGRP) perms[3] = 'r';
+    if (mode & S_IWGRP) perms[4] = 'w';
+    if (mode & S_IXGRP) perms[5] = 'x';
+    if (mode & S_IROTH) perms[6] = 'r';
+    if (mode & S_IWOTH) perms[7] = 'w';
+    if (mode & S_IXOTH) perms[8] = 'x';
+#endif
+    return perms;
+}
 
 COOKDEF cook_string_view_t cook_sv_from_cstr(const char *cstr) {
     return (cook_string_view_t) {
@@ -1074,6 +1460,24 @@ typedef cook_string_builder_t string_builder_t;
 typedef cook_cmd_t cmd_t;
 typedef cook_mucase_t mucase_t;
 typedef cook_musuite_t musuite_t;
+typedef cook_attr_t attr_t;
+typedef cook_dir_t dir_t;
+
+#define fs_readfile    cook_fs_readfile
+#define fs_cwd         cook_fs_cwd
+#define fs_mkdir       cook_fs_mkdir
+#define fs_rmdir       cook_fs_rmdir
+#define fs_chdir       cook_fs_chdir
+#define fs_opendir     cook_fs_opendir
+#define fs_closedir    cook_fs_closedir
+#define fs_readdir     cook_fs_readdir
+#define fs_stat        cook_fs_stat
+#define fs_move        cook_fs_move
+#define fs_isdir       cook_fs_isdir
+#define fs_isfile      cook_fs_isfile
+#define fs_exists      cook_fs_exists
+#define fs_type2string cook_fs_type2string
+#define fs_perm2string cook_fs_perm2string
 
 #define vec_push     cook_vec_push
 #define vec_pop      cook_vec_pop
